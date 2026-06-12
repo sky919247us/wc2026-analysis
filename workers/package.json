@@ -1,0 +1,16 @@
+{
+  "name": "wc2026-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute wc2026 --remote --file ../db/schema.sql",
+    "db:init:local": "wrangler d1 execute wc2026 --local --file ../db/schema.sql"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "wrangler": "^3.90.0",
+    "@cloudflare/workers-types": "^4.20241112.0"
+  }
+}

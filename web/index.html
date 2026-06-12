@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WC 2026 世界盃分析 — 台灣運彩主推</title>
+  <meta name="description" content="2026 世界盃賽程、積分榜、AI 分析與台灣運彩玩法期望值。僅供參考，未滿18歲不得購買運動彩券。" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">🏆 WC 2026</div>
+    <nav>
+      <button class="tab active" data-tab="matches">⚽ 比分盤</button>
+      <button class="tab" data-tab="standings">🥇 積分榜</button>
+      <button class="tab" data-tab="teams">🌍 球隊</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="matches" class="panel active">
+      <div class="toolbar">
+        <button class="filter active" data-filter="all">全部</button>
+        <button class="filter" data-filter="today">今日（台灣時間）</button>
+        <button class="filter" data-filter="upcoming">未開賽</button>
+      </div>
+      <div id="match-list" class="list"><p class="muted">載入中…</p></div>
+    </section>
+
+    <section id="standings" class="panel">
+      <div id="standings-grid" class="grid"><p class="muted">載入中…</p></div>
+    </section>
+
+    <section id="teams" class="panel">
+      <input id="team-search" type="search" placeholder="搜尋球隊（中文或英文）…" />
+      <div id="team-grid" class="grid"><p class="muted">載入中…</p></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>⚠️ 本站僅提供分析資訊，不構成投注建議。未滿 18 歲不得購買運動彩券，請理性投注。</p>
+    <p class="muted" id="last-sync"></p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
