@@ -1,0 +1,35 @@
+# wrangler deploy 用設定
+name = "wc2026-api"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+# D1
+[[d1_databases]]
+binding = "DB"
+database_name = "wc2026"
+database_id = "REPLACE_AFTER_wrangler_d1_create"
+
+# KV 熱快取
+[[kv_namespaces]]
+binding = "CACHE"
+id = "REPLACE_AFTER_wrangler_kv_create"
+
+# 免費層 5 個 cron 全用上
+[triggers]
+crons = [
+  "*/5 * * * *",   # 台灣運彩賠率快照 + 異動偵測
+  "*/15 * * * *",  # 國際賠率 (The Odds API)
+  "*/30 * * * *",  # 新聞 RSS
+  "0 * * * *",     # 傷停 / Elo / 球隊近況
+  "30 * * * *",    # 賽後比分回填 → 對帳
+]
+
+# Secrets（用 `wrangler secret put <NAME>` 設定，不寫在這裡）：
+#   OPENAI_API_KEY        — GPT（主）
+#   ANTHROPIC_API_KEY     — Claude（fallback，可不設）
+#   ODDS_API_KEY          — The Odds API
+#   FOOTBALL_DATA_TOKEN   — football-data.org
+#   TELEGRAM_BOT_TOKEN    — 推播
+[vars]
+LLM_PROVIDERS = "openai:gpt-4o-mini,anthropic:claude-haiku-4-5"
+# OPENAI_BASE_URL 可改成任何 OpenAI 相容端點
