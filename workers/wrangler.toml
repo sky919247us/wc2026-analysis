@@ -7,22 +7,16 @@ compatibility_date = "2026-06-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "wc2026"
-database_id = "REPLACE_AFTER_wrangler_d1_create"
+database_id = "cca9679a-7874-4f5b-b358-4a876d8c40e5"
 
 # KV 熱快取
 [[kv_namespaces]]
 binding = "CACHE"
-id = "REPLACE_AFTER_wrangler_kv_create"
+id = "05d7334de0c64860b035bca9cfe9da3d"
 
-# 免費層 5 個 cron 全用上
+# 帳號 cron 上限 5 個 → 只用 1 個，每 5 分鐘觸發，程式內依分鐘數分派任務
 [triggers]
-crons = [
-  "*/5 * * * *",   # 台灣運彩賠率快照 + 異動偵測
-  "*/15 * * * *",  # 國際賠率 (The Odds API)
-  "*/30 * * * *",  # 新聞 RSS
-  "0 * * * *",     # 傷停 / Elo / 球隊近況
-  "30 * * * *",    # 賽後比分回填 → 對帳
-]
+crons = ["*/5 * * * *"]
 
 # Secrets（用 `wrangler secret put <NAME>` 設定，不寫在這裡）：
 #   OPENAI_API_KEY        — GPT（主）

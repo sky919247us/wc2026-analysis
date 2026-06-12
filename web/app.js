@@ -1,5 +1,5 @@
 /** API 位置：部署後改成你的 Worker 網址（如 https://wc2026-api.<subdomain>.workers.dev） */
-const API_BASE = window.WC_API_BASE || "https://wc2026-api.example.workers.dev";
+const API_BASE = window.WC_API_BASE || "https://wc2026-api.sky919247us.workers.dev";
 
 const FLAGS = {
   ARG:"🇦🇷",FRA:"🇫🇷",ENG:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",BEL:"🇧🇪",BRA:"🇧🇷",POR:"🇵🇹",NED:"🇳🇱",ESP:"🇪🇸",
