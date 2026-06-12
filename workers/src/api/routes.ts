@@ -6,6 +6,7 @@
  *   GET /api/teams
  */
 import type { Env } from "../env";
+import { syncMatches, syncStandings } from "../fetchers/footballData";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -69,6 +70,15 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
       `SELECT id, name_zh, name_en, fifa_rank, grp, elo FROM teams ORDER BY grp, id`,
     ).all();
     return json({ teams: results });
+  }
+
+  // 手動觸發同步（需 ADMIN_KEY）
+  if (path === "/api/admin/sync") {
+    if (!env.ADMIN_KEY || req.headers.get("x-admin-key") !== env.ADMIN_KEY)
+      return json({ error: "unauthorized" }, 401);
+    const r = await syncMatches(env);
+    const g = await syncStandings(env);
+    return json({ ok: true, ...r, groups: g });
   }
 
   return json({ error: "not found" }, 404);

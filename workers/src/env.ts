@@ -6,4 +6,5 @@ export interface Env extends LLMEnv {
   FOOTBALL_DATA_TOKEN?: string;
   ODDS_API_KEY?: string;
   TELEGRAM_BOT_TOKEN?: string;
+  ADMIN_KEY?: string; // /api/admin/* 手動觸發用
 }
