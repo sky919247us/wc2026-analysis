@@ -6,6 +6,7 @@
 import type { Env } from "./env";
 import { handleApi } from "./api/routes";
 import { syncMatches, syncStandings } from "./fetchers/footballData";
+import { syncIntlOdds } from "./fetchers/oddsApi";
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -30,8 +31,8 @@ export default {
 
     // 每 5 分鐘：台灣運彩賠率快照 + 異動偵測（Phase 2）
 
-    // 每 15 分鐘：國際賠率 The Odds API（Phase 2）
-    // if (minute % 15 === 0) ...
+    // 每 15 分鐘：國際賠率 The Odds API（ODDS_API_KEY 設定後自動啟用）
+    if (minute % 15 === 0 && env.ODDS_API_KEY) ctx.waitUntil(runIntlOddsSync(env));
 
     // 每 30 分鐘：新聞 RSS（Phase 2）
     // if (minute % 30 === 0) ...
@@ -43,6 +44,15 @@ export default {
     if (minute === 30) ctx.waitUntil(runFixtureSync(env));
   },
 } satisfies ExportedHandler<Env>;
+
+async function runIntlOddsSync(env: Env): Promise<void> {
+  try {
+    const r = await syncIntlOdds(env);
+    console.log(`intl odds sync ok: ${r.inserted} snapshots, skipped: ${r.skipped.join("; ") || "none"}`);
+  } catch (e) {
+    console.error("intl odds sync failed", e);
+  }
+}
 
 async function runFixtureSync(env: Env): Promise<void> {
   try {
