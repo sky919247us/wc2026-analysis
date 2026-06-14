@@ -11,6 +11,7 @@ import { syncIntlOdds } from "../fetchers/oddsApi";
 import { handleIngest } from "./ingest";
 import { evForMarket } from "../models/ev";
 import { runPredictions } from "../models/predict";
+import { settleMatches } from "../models/settle";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -107,6 +108,44 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     return json({ predictions: results });
   }
 
+  // 公開戰績：總命中率、ROI、分風險評級統計、近期逐場明細
+  if (path === "/api/track") {
+    const summary = await env.DB.prepare(
+      `SELECT COUNT(*) AS total, SUM(hit) AS hits, ROUND(SUM(profit_units), 2) AS profit
+       FROM track_record`,
+    ).first<{ total: number; hits: number; profit: number }>();
+
+    const byGrade = await env.DB.prepare(
+      `SELECT p.risk_grade AS grade, COUNT(*) AS total, SUM(tr.hit) AS hits
+       FROM track_record tr
+       JOIN (SELECT match_id, risk_grade, MAX(created_at) FROM predictions GROUP BY match_id) p
+         ON p.match_id = tr.match_id
+       GROUP BY p.risk_grade ORDER BY p.risk_grade`,
+    ).all();
+
+    const recent = await env.DB.prepare(
+      `SELECT tr.match_id, tr.recommended_market, tr.recommended_odds, tr.hit, tr.profit_units, tr.settled_at,
+              h.name_zh AS home_zh, a.name_zh AS away_zh, m.home_score, m.away_score
+       FROM track_record tr
+       JOIN matches m ON m.id = tr.match_id
+       JOIN teams h ON h.id = m.home_id
+       JOIN teams a ON a.id = m.away_id
+       ORDER BY tr.settled_at DESC LIMIT 50`,
+    ).all();
+
+    const total = summary?.total ?? 0;
+    const hits = summary?.hits ?? 0;
+    const profit = summary?.profit ?? 0;
+    return json({
+      total, hits,
+      hitRate: total ? +((hits / total) * 100).toFixed(1) : 0,
+      profitUnits: profit,
+      roi: total ? +((profit / total) * 100).toFixed(1) : 0, // 每注平均報酬率%
+      byGrade: byGrade.results,
+      recent: recent.results,
+    });
+  }
+
   // 最近的盤口異動警報
   if (path === "/api/alerts") {
     const { results } = await env.DB.prepare(
@@ -139,6 +178,9 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/admin/predict") {
       return json({ ok: true, predictions: await runPredictions(env) });
+    }
+    if (path === "/api/admin/settle") {
+      return json({ ok: true, ...(await settleMatches(env)) });
     }
   }
 

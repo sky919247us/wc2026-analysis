@@ -8,6 +8,7 @@ import { handleApi } from "./api/routes";
 import { syncMatches, syncStandings } from "./fetchers/footballData";
 import { syncIntlOdds } from "./fetchers/oddsApi";
 import { runPredictions } from "./models/predict";
+import { settleMatches } from "./models/settle";
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -44,8 +45,8 @@ export default {
     // 每 20 分鐘：重算預測（吸收最新 Pinnacle 市場信號）
     if (minute % 20 === 0 && minute !== 0) ctx.waitUntil(runPredictions(env).then(() => {}));
 
-    // 每小時 30 分：賽後對帳（Phase 5）；先借作第二次賽程同步，比賽日更即時
-    if (minute === 30) ctx.waitUntil(runFixtureSync(env));
+    // 每小時 30 分：先同步最新比分，再賽後對帳（更新戰績 + 完賽隊 Elo）
+    if (minute === 30) ctx.waitUntil(runFixtureSync(env).then(() => settleMatches(env)).then(() => {}));
   },
 } satisfies ExportedHandler<Env>;
 

@@ -232,6 +232,59 @@ async function openDetail(matchId) {
   }
 }
 
+/* ---------- 戰績頁 ---------- */
+const selZh = (s) => ({ home: "主勝", draw: "平局", away: "客勝" }[s] || s);
+
+async function loadTrack() {
+  const el = document.getElementById("track-body");
+  try {
+    const t = await api("/api/track");
+    if (!t.total) {
+      el.innerHTML = `<div class="track-empty">
+        <h3>戰績累積中</h3>
+        <p>系統只記錄「開賽前已預測」的場次，賽後自動對帳。<br>
+        待已預測的比賽陸續完賽後，這裡會公開累積命中率與報酬率。</p>
+      </div>`;
+      return;
+    }
+    const roiCls = t.roi >= 0 ? "pos" : "neg";
+    const grades = (t.byGrade || []).map((g) => {
+      const rate = g.total ? ((g.hits / g.total) * 100).toFixed(0) : 0;
+      return `<div class="grade-stat">
+        <div class="big grade-${g.grade}" style="background:none">${g.grade} 級</div>
+        <div class="lbl">${g.hits}/${g.total} 命中 · ${rate}%</div>
+      </div>`;
+    }).join("");
+    const rows = (t.recent || []).map((r) => `<tr>
+      <td>${r.home_zh} ${r.home_score}-${r.away_score} ${r.away_zh}</td>
+      <td>${selZh(r.recommended_market)}</td>
+      <td>${r.recommended_odds?.toFixed(2) ?? "-"}</td>
+      <td class="${r.hit ? "tag-hit" : "tag-miss"}">${r.hit ? "✓ 中" : "✗ 未中"}</td>
+      <td class="${r.profit_units >= 0 ? "tag-hit" : "tag-miss"}">${r.profit_units >= 0 ? "+" : ""}${r.profit_units?.toFixed(2)}</td>
+    </tr>`).join("");
+
+    el.innerHTML = `
+      <div class="track-hero">
+        <div class="track-stat"><div class="big">${t.total}</div><div class="lbl">已對帳場次</div></div>
+        <div class="track-stat"><div class="big">${t.hitRate}%</div><div class="lbl">命中率（${t.hits}/${t.total}）</div></div>
+        <div class="track-stat"><div class="big ${t.profitUnits >= 0 ? "pos" : "neg"}">${t.profitUnits >= 0 ? "+" : ""}${t.profitUnits}</div><div class="lbl">平準注累積損益</div></div>
+        <div class="track-stat"><div class="big ${roiCls}">${t.roi >= 0 ? "+" : ""}${t.roi}%</div><div class="lbl">平均每注報酬 (ROI)</div></div>
+      </div>
+      ${grades ? `<div class="grade-stats">${grades}</div>` : ""}
+      <div class="card">
+        <table class="rec-table">
+          <tr><th>比賽（實際比分）</th><th>AI 推薦</th><th>賠率</th><th>結果</th><th>損益</th></tr>
+          ${rows}
+        </table>
+      </div>
+      <p class="muted" style="font-size:.8rem;margin-top:14px">
+        平準注：每場固定下注 1 注，命中得（賠率−1），未中失 1。賠率優先採台灣運彩，無則 Pinnacle，再無則以模型機率估算。僅供參考，不構成投注建議。
+      </p>`;
+  } catch {
+    el.innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';
+  }
+}
+
 /* ---------- 球隊 ---------- */
 let allTeams = [];
 function renderTeams(teams) {
@@ -268,3 +321,4 @@ loadMatches();
 loadStandings();
 loadTeams();
 loadAnalysis();
+loadTrack();
