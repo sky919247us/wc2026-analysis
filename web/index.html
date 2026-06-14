@@ -13,6 +13,7 @@
     <nav>
       <button class="tab active" data-tab="matches">⚽ 比分盤</button>
       <button class="tab" data-tab="standings">🥇 積分榜</button>
+      <button class="tab" data-tab="analysis">🔮 AI分析</button>
       <button class="tab" data-tab="teams">🌍 球隊</button>
     </nav>
   </header>
@@ -31,6 +32,10 @@
       <div id="standings-grid" class="grid"><p class="muted">載入中…</p></div>
     </section>
 
+    <section id="analysis" class="panel">
+      <div id="analysis-list" class="list"><p class="muted">載入中…</p></div>
+    </section>
+
     <section id="teams" class="panel">
       <input id="team-search" type="search" placeholder="搜尋球隊（中文或英文）…" />
       <div id="team-grid" class="grid"><p class="muted">載入中…</p></div>
@@ -41,6 +46,14 @@
     <p>⚠️ 本站僅提供分析資訊，不構成投注建議。未滿 18 歲不得購買運動彩券，請理性投注。</p>
     <p class="muted" id="last-sync"></p>
   </footer>
+
+  <!-- 賽事詳情 / AI 分析彈窗 -->
+  <div id="detail-overlay" class="overlay" hidden>
+    <div class="overlay-box">
+      <button id="detail-close" class="close">✕</button>
+      <div id="detail-body"></div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

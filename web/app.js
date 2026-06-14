@@ -104,6 +104,134 @@ async function loadStandings() {
   }
 }
 
+/* ---------- AI 分析列表 ---------- */
+const pct = (x) => `${(x * 100).toFixed(0)}%`;
+
+async function loadAnalysis() {
+  const el = document.getElementById("analysis-list");
+  try {
+    const data = await api("/api/predict");
+    const preds = data.predictions || [];
+    if (!preds.length) { el.innerHTML = '<p class="muted">尚無預測資料</p>'; return; }
+    el.innerHTML = preds.map((p) => `
+      <div class="card analysis-card" data-mid="${p.match_id}">
+        <div class="ac-head">
+          <div class="ac-teams">${p.home_zh} <span class="muted">vs</span> ${p.away_zh}</div>
+          <div class="ac-grade grade-${p.risk_grade}">${p.risk_grade}</div>
+        </div>
+        <div class="wld-bar">
+          <div class="h" style="width:${p.prob_home * 100}%"></div>
+          <div class="d" style="width:${p.prob_draw * 100}%"></div>
+          <div class="a" style="width:${p.prob_away * 100}%"></div>
+        </div>
+        <div class="wld-legend">
+          <span>主勝 ${pct(p.prob_home)}</span>
+          <span>平 ${pct(p.prob_draw)}</span>
+          <span>客勝 ${pct(p.prob_away)}</span>
+        </div>
+        <div class="ac-meta">
+          <span>🎯 信心 ${p.confidence}</span>
+          <span>⚡ 爆冷 ${p.upset_index}</span>
+          <span>⚽ xG ${p.xg_home} - ${p.xg_away}</span>
+          <span class="muted">點擊看完整分析 →</span>
+        </div>
+      </div>`).join("");
+    el.querySelectorAll(".analysis-card").forEach((c) =>
+      c.addEventListener("click", () => openDetail(c.dataset.mid)));
+  } catch {
+    el.innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';
+  }
+}
+
+/* ---------- 賽事詳情彈窗 ---------- */
+const overlay = document.getElementById("detail-overlay");
+document.getElementById("detail-close").addEventListener("click", () => (overlay.hidden = true));
+overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.hidden = true; });
+
+const modelRow = (name, m) => `
+  <div class="model-row">
+    <div class="lbl"><span>${name}</span></div>
+    <div class="tri-bar">
+      <span class="h" style="width:${m.home * 100}%">${pct(m.home)}</span>
+      <span class="d" style="width:${m.draw * 100}%">${pct(m.draw)}</span>
+      <span class="a" style="width:${m.away * 100}%">${pct(m.away)}</span>
+    </div>
+  </div>`;
+
+async function openDetail(matchId) {
+  overlay.hidden = false;
+  const body = document.getElementById("detail-body");
+  body.innerHTML = '<p class="muted">載入中…</p>';
+  try {
+    const [predRes, oddsRes] = await Promise.all([
+      api(`/api/predict?match_id=${matchId}`),
+      api(`/api/odds?match_id=${matchId}`).catch(() => ({ tw_ev: null })),
+    ]);
+    const p = predRes.prediction;
+    if (!p) { body.innerHTML = '<p class="muted">查無預測</p>'; return; }
+    const d = JSON.parse(p.detail_json);
+    const pd = d.poissonDetail;
+
+    const evRows = oddsRes.tw_ev
+      ? oddsRes.tw_ev.map((e) => {
+          const lbl = { home: "主勝", draw: "平局", away: "客勝" }[e.selection];
+          const cls = e.ev > 0 ? "ev-pos" : "ev-neg";
+          return `<tr><td>${lbl}</td><td>${e.twOdds.toFixed(2)}</td>
+            <td>${pct(e.trueProb)}</td>
+            <td class="${cls}">${e.ev > 0 ? "+" : ""}${(e.ev * 100).toFixed(1)}%</td></tr>`;
+        }).join("")
+      : null;
+
+    body.innerHTML = `
+      <div class="dt-title">${p.home_zh ?? ""} vs ${p.away_zh ?? ""}</div>
+      <div class="dt-stage">🔮 五模型融合分析</div>
+
+      <div class="dt-top">
+        <div class="ring" style="--p:${p.confidence}"><span class="num">${p.confidence}</span></div>
+        <div class="dt-cards">
+          <div class="dt-stat"><div class="v grade-${p.risk_grade}" style="background:none">${p.risk_grade}</div><div class="l">風險評級</div></div>
+          <div class="dt-stat"><div class="v">${p.upset_index}</div><div class="l">爆冷指數</div></div>
+          <div class="dt-stat"><div class="v">${pd.over25 ? pct(pd.over25) : "-"}</div><div class="l">大球 2.5</div></div>
+          <div class="dt-stat"><div class="v">${pd.btts ? pct(pd.btts) : "-"}</div><div class="l">雙方進球</div></div>
+        </div>
+      </div>
+
+      <div class="dt-section">
+        <h4>📊 各模型預測對比</h4>
+        ${modelRow("Elo 實力模型", d.elo)}
+        ${modelRow("Poisson 進球模型", d.poisson)}
+        ${modelRow("特徵加權模型", d.feature)}
+        ${d.market ? modelRow("市場信號 (Pinnacle 去水)", d.market) : ""}
+        <div style="border-top:1px solid #ffffff14;margin:10px 0"></div>
+        ${modelRow("🎯 融合結果", d.fused)}
+      </div>
+
+      <div class="dt-section">
+        <h4>⚽ Poisson 最可能比分（xG ${pd.xgHome} - ${pd.xgAway}）</h4>
+        <div class="score-grid">
+          ${pd.topScores.map((s) => `<div class="score-cell"><div class="s">${s.score}</div><div class="p">${pct(s.prob)}</div></div>`).join("")}
+        </div>
+      </div>
+
+      <div class="dt-section">
+        <h4>💰 台灣運彩期望值 (EV)</h4>
+        ${evRows
+          ? `<table class="ev-table"><tr><th>玩法</th><th>運彩賠率</th><th>真實機率</th><th>EV</th></tr>${evRows}</table>
+             <p class="muted" style="font-size:.8rem;margin-top:8px">EV 為正代表該玩法在台灣運彩有價值（以 Pinnacle 去水機率為基準）</p>`
+          : `<p class="muted">尚未取得台灣運彩 / Pinnacle 賠率對比資料。賠率資料接上後此處顯示各玩法期望值。</p>`}
+      </div>
+
+      <div id="report-slot" class="dt-section">
+        <h4>📝 AI 白話分析報告</h4>
+        <div class="report-md muted">AI 報告功能即將上線（Gemini 生成）。屆時此處顯示新手也看得懂的完整分析與最終推薦。</div>
+      </div>
+
+      <div class="disclaimer">⚠️ 以上分析由 AI 多模型自動生成，僅供娛樂參考，不構成投注建議。未滿 18 歲不得購買運動彩券，請理性投注。</div>`;
+  } catch (e) {
+    body.innerHTML = '<p class="muted">⚠️ 載入失敗</p>';
+  }
+}
+
 /* ---------- 球隊 ---------- */
 let allTeams = [];
 function renderTeams(teams) {
@@ -139,3 +267,4 @@ api("/api/health").then((h) => {
 loadMatches();
 loadStandings();
 loadTeams();
+loadAnalysis();

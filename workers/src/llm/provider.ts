@@ -38,6 +38,7 @@ export interface LLMEnv {
 
 import { OpenAIProvider } from "./openai";
 import { AnthropicProvider } from "./anthropic";
+import { GeminiProvider } from "./gemini";
 
 export function buildProviderChain(env: LLMEnv): LLMProvider[] {
   const spec = env.LLM_PROVIDERS ?? "openai:gpt-4o-mini";
@@ -54,7 +55,10 @@ export function buildProviderChain(env: LLMEnv): LLMProvider[] {
         if (env.ANTHROPIC_API_KEY)
           chain.push(new AnthropicProvider(env.ANTHROPIC_API_KEY, model));
         break;
-      // case "gemini": 後補
+      case "gemini":
+        if (env.GEMINI_API_KEY)
+          chain.push(new GeminiProvider(env.GEMINI_API_KEY, model || undefined));
+        break;
     }
   }
   return chain;
