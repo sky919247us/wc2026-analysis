@@ -10,6 +10,7 @@ import { syncMatches, syncStandings } from "../fetchers/footballData";
 import { syncIntlOdds } from "../fetchers/oddsApi";
 import { handleIngest } from "./ingest";
 import { evForMarket } from "../models/ev";
+import { runPredictions } from "../models/predict";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -82,6 +83,30 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     return json(await buildOddsView(env, matchId));
   }
 
+  // 最新預測（單場用 match_id，或回傳全部最新一筆）
+  if (path === "/api/predict") {
+    const matchId = url.searchParams.get("match_id");
+    if (matchId) {
+      const row = await env.DB.prepare(
+        `SELECT * FROM predictions WHERE match_id = ?1 ORDER BY created_at DESC LIMIT 1`,
+      ).bind(matchId).first();
+      return json({ prediction: row });
+    }
+    // 各場最新一筆，附隊名
+    const { results } = await env.DB.prepare(
+      `SELECT p.*, h.name_zh AS home_zh, a.name_zh AS away_zh, m.kickoff_utc, m.stage
+       FROM predictions p
+       JOIN (SELECT match_id, MAX(created_at) AS mx FROM predictions GROUP BY match_id) last
+         ON last.match_id = p.match_id AND last.mx = p.created_at
+       JOIN matches m ON m.id = p.match_id
+       JOIN teams h ON h.id = m.home_id
+       JOIN teams a ON a.id = m.away_id
+       WHERE m.status != 'FINISHED'
+       ORDER BY m.kickoff_utc LIMIT 200`,
+    ).all();
+    return json({ predictions: results });
+  }
+
   // 最近的盤口異動警報
   if (path === "/api/alerts") {
     const { results } = await env.DB.prepare(
@@ -111,6 +136,9 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/admin/odds-ingest" && req.method === "POST") {
       return handleIngest(req, env);
+    }
+    if (path === "/api/admin/predict") {
+      return json({ ok: true, predictions: await runPredictions(env) });
     }
   }
 

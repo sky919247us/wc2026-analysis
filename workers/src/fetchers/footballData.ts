@@ -23,7 +23,7 @@ const ZH_NAMES: Record<string, string> = {
   UKR: "烏克蘭", HUN: "匈牙利", SVK: "斯洛伐克", SVN: "斯洛維尼亞",
   ROU: "羅馬尼亞", GRE: "希臘", ALB: "阿爾巴尼亞", GEO: "喬治亞",
   UZB: "烏茲別克", JOR: "約旦", IRQ: "伊拉克", UAE: "阿聯", CUW: "古拉索",
-  HAI: "海地", CPV: "維德角",
+  HAI: "海地", CPV: "維德角", BIH: "波士尼亞", ITA: "義大利",
 };
 
 async function fdFetch(env: Env, path: string): Promise<any> {
