@@ -1,0 +1,20 @@
+/** 國際賠率源（The Odds API / OddsPapi）球隊英文名 → 我們的 TLA */
+export const NAME_TO_TLA: Record<string, string> = {
+  "South Korea": "KOR", "Korea Republic": "KOR", "Czech Republic": "CZE", Czechia: "CZE",
+  Argentina: "ARG", France: "FRA", England: "ENG", Belgium: "BEL", Brazil: "BRA",
+  Portugal: "POR", Netherlands: "NED", Spain: "ESP", Uruguay: "URY", Colombia: "COL",
+  Germany: "GER", Morocco: "MAR", Japan: "JPN", Croatia: "CRO",
+  "United States": "USA", USA: "USA", Mexico: "MEX", Senegal: "SEN", Denmark: "DEN",
+  Switzerland: "SUI", Australia: "AUS", Iran: "IRN", Ecuador: "ECU", Canada: "CAN",
+  Qatar: "QAT", Wales: "WAL", "New Zealand": "NZL", "South Africa": "RSA",
+  "Saudi Arabia": "KSA", Tunisia: "TUN", Nigeria: "NGA", Cameroon: "CMR", Ghana: "GHA",
+  Egypt: "EGY", Algeria: "ALG", "Ivory Coast": "CIV", Panama: "PAN", "Costa Rica": "CRC",
+  Honduras: "HON", Jamaica: "JAM", Paraguay: "PAR", Peru: "PER", Chile: "CHI",
+  Venezuela: "VEN", Bolivia: "BOL", Scotland: "SCO", Ireland: "IRL", Norway: "NOR",
+  Sweden: "SWE", Poland: "POL", Austria: "AUT", Serbia: "SRB", Turkey: "TUR",
+  Ukraine: "UKR", Hungary: "HUN", Slovakia: "SVK", Slovenia: "SVN", Romania: "ROU",
+  Greece: "GRE", Albania: "ALB", Georgia: "GEO", Uzbekistan: "UZB", Jordan: "JOR",
+  Iraq: "IRQ", "United Arab Emirates": "UAE", Curacao: "CUR", "Curaçao": "CUR", Haiti: "HAI",
+  "Cape Verde": "CPV", "Bosnia and Herzegovina": "BIH", "Bosnia-Herzegovina": "BIH",
+  "DR Congo": "COD", "Congo DR": "COD", Italy: "ITA",
+};

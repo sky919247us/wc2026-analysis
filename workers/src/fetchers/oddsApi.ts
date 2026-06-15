@@ -6,29 +6,10 @@
  */
 import type { Env } from "../env";
 import { detectMovement } from "../models/movement";
+import { NAME_TO_TLA } from "./teamNames";
 
 const SPORT = "soccer_fifa_world_cup";
 const BOOKMAKERS = "pinnacle,bet365";
-
-/** The Odds API 球隊名 → football-data TLA。兩邊命名不同，靠別名表對映。 */
-const NAME_TO_TLA: Record<string, string> = {
-  "South Korea": "KOR", "Korea Republic": "KOR", "Czech Republic": "CZE", Czechia: "CZE",
-  Argentina: "ARG", France: "FRA", England: "ENG", Belgium: "BEL", Brazil: "BRA",
-  Portugal: "POR", Netherlands: "NED", Spain: "ESP", Uruguay: "URU", Colombia: "COL",
-  Germany: "GER", Morocco: "MAR", Japan: "JPN", Croatia: "CRO",
-  "United States": "USA", USA: "USA", Mexico: "MEX", Senegal: "SEN", Denmark: "DEN",
-  Switzerland: "SUI", Australia: "AUS", Iran: "IRN", Ecuador: "ECU", Canada: "CAN",
-  Qatar: "QAT", Wales: "WAL", "New Zealand": "NZL", "South Africa": "RSA",
-  "Saudi Arabia": "KSA", Tunisia: "TUN", Nigeria: "NGA", Cameroon: "CMR", Ghana: "GHA",
-  Egypt: "EGY", Algeria: "ALG", "Ivory Coast": "CIV", Panama: "PAN", "Costa Rica": "CRC",
-  Honduras: "HON", Jamaica: "JAM", Paraguay: "PAR", Peru: "PER", Chile: "CHI",
-  Venezuela: "VEN", Bolivia: "BOL", Scotland: "SCO", Ireland: "IRL", Norway: "NOR",
-  Sweden: "SWE", Poland: "POL", Austria: "AUT", Serbia: "SRB", Turkey: "TUR",
-  Ukraine: "UKR", Hungary: "HUN", Slovakia: "SVK", Slovenia: "SVN", Romania: "ROU",
-  Greece: "GRE", Albania: "ALB", Georgia: "GEO", Uzbekistan: "UZB", Jordan: "JOR",
-  Iraq: "IRQ", "United Arab Emirates": "UAE", Curacao: "CUW", Haiti: "HAI",
-  "Cape Verde": "CPV", "Bosnia and Herzegovina": "BIH", "Bosnia-Herzegovina": "BIH",
-};
 
 export async function syncIntlOdds(env: Env): Promise<{ inserted: number; skipped: string[] }> {
   if (!env.ODDS_API_KEY) throw new Error("ODDS_API_KEY not set");

@@ -7,6 +7,7 @@ import type { Env } from "./env";
 import { handleApi } from "./api/routes";
 import { syncMatches, syncStandings } from "./fetchers/footballData";
 import { syncIntlOdds } from "./fetchers/oddsApi";
+import { syncOddsPapi } from "./fetchers/oddsPapi";
 import { runPredictions } from "./models/predict";
 import { settleMatches } from "./models/settle";
 
@@ -29,12 +30,18 @@ export default {
    * 用分鐘數路由可無限加任務而不佔名額。
    */
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const minute = new Date(event.scheduledTime).getUTCMinutes();
+    const d = new Date(event.scheduledTime);
+    const minute = d.getUTCMinutes();
+    const hour = d.getUTCHours();
 
     // 每 5 分鐘：台灣運彩賠率快照 + 異動偵測（Phase 2）
 
-    // 每 15 分鐘：國際賠率 The Odds API（ODDS_API_KEY 設定後自動啟用）
+    // 國際賠率來源（擇一即可，依設定的 key 自動啟用）：
+    // a) The Odds API：每 15 分鐘（額度為信用點，較寬）
     if (minute % 15 === 0 && env.ODDS_API_KEY) ctx.waitUntil(runIntlOddsSync(env));
+    // b) OddsPapi：免費僅 250 req/月，故一天只跑 2 次（UTC 02:00 / 14:00）整點
+    if (minute === 0 && (hour === 2 || hour === 14) && env.ODDSPAPI_KEY)
+      ctx.waitUntil(runOddsPapiSync(env));
 
     // 每 30 分鐘：新聞 RSS（Phase 2）
     // if (minute % 30 === 0) ...
@@ -49,6 +56,15 @@ export default {
     if (minute === 30) ctx.waitUntil(runFixtureSync(env).then(() => settleMatches(env)).then(() => {}));
   },
 } satisfies ExportedHandler<Env>;
+
+async function runOddsPapiSync(env: Env): Promise<void> {
+  try {
+    const r = await syncOddsPapi(env);
+    console.log(`oddspapi sync ok: ${r.inserted} snapshots from ${r.fixtures} fixtures, skipped: ${r.skipped.join("; ") || "none"}`);
+  } catch (e) {
+    console.error("oddspapi sync failed", e);
+  }
+}
 
 async function runIntlOddsSync(env: Env): Promise<void> {
   try {

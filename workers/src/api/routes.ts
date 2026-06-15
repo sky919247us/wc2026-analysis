@@ -8,6 +8,7 @@
 import type { Env } from "../env";
 import { syncMatches, syncStandings } from "../fetchers/footballData";
 import { syncIntlOdds } from "../fetchers/oddsApi";
+import { syncOddsPapi } from "../fetchers/oddsPapi";
 import { handleIngest } from "./ingest";
 import { evForMarket } from "../models/ev";
 import { runPredictions } from "../models/predict";
@@ -172,6 +173,9 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/admin/odds-sync") {
       return json(await syncIntlOdds(env));
+    }
+    if (path === "/api/admin/oddspapi-sync") {
+      return json(await syncOddsPapi(env));
     }
     if (path === "/api/admin/odds-ingest" && req.method === "POST") {
       return handleIngest(req, env);
