@@ -26,8 +26,9 @@ if (!ADMIN_KEY) {
 
 const captured = [];
 
+const HEADLESS = process.env.HEADLESS !== "0"; // HEADLESS=0 開真實視窗（較易過 Cloudflare 質詢）
 const browser = await chromium.launch({
-  headless: true,
+  headless: HEADLESS,
   args: ["--disable-blink-features=AutomationControlled"],
 });
 const ctx = await browser.newContext({
@@ -39,18 +40,25 @@ const ctx = await browser.newContext({
 });
 const page = await ctx.newPage();
 
-// 攔截所有 JSON 回應，記下含賠率特徵的
+const requestLog = [];
+// 記錄所有 /services/ 請求（method + url + POST body）→ 找賠率端點規律
+page.on("request", (req) => {
+  const u = req.url();
+  if (/\/services\//.test(u)) {
+    requestLog.push({ method: req.method(), url: u, post: req.postData() ?? null });
+  }
+});
+
+// 攔截 /services/ 的 JSON 回應全留（賠率就在其中）
 page.on("response", async (res) => {
   try {
+    const url = res.url();
+    if (!/\/services\//.test(url)) return;
     const ct = res.headers()["content-type"] ?? "";
     if (!ct.includes("json")) return;
-    const url = res.url();
     const body = await res.text();
-    // 粗篩：包含賠率相關關鍵字的回應才留
-    if (/odds|outcome|betOffer|event|match|handicap/i.test(url + body.slice(0, 2000))) {
-      captured.push({ url, body });
-      console.log(`captured: ${url} (${body.length} bytes)`);
-    }
+    captured.push({ url, body });
+    console.log(`captured: ${url} (${body.length} bytes)`);
   } catch { /* response already disposed */ }
 });
 
@@ -65,8 +73,36 @@ for (let i = 0; i < 12; i++) {
   await page.waitForTimeout(5000);
 }
 
-// 讓 SPA 載入足球/世界盃區塊（之後依實際 DOM 補導覽點擊）
-await page.waitForTimeout(15000);
+await page.waitForTimeout(8000);
+
+// 點進「足球」運動分類，再點第一場賽事，觸發賠率端點
+async function clickText(text) {
+  try {
+    const el = page.getByText(text, { exact: false }).first();
+    await el.click({ timeout: 8000 });
+    return true;
+  } catch { return false; }
+}
+// 點側欄「足球」運動（exact 比對，避開 Top-bets 的足球分頁）
+let clicked = false;
+const soccer = page.getByText("足球", { exact: true });
+const n = await soccer.count();
+console.log(`足球 candidates: ${n}`);
+for (let i = 0; i < n; i++) {
+  try {
+    await soccer.nth(i).click({ timeout: 5000 });
+    console.log(`clicked 足球 #${i}`);
+    await page.waitForTimeout(5000);
+    clicked = true;
+    break;
+  } catch { /* try next */ }
+}
+await page.waitForTimeout(6000);
+// 點第一場賽事的賠率/隊名，觸發 market 載入
+for (const sel of ["[class*=Participant]", "[class*=participant]", "[class*=outcome]", "[class*=Outcome]", "[class*=selection]", "[class*=event] a", "[class*=Event] a"]) {
+  try { await page.locator(sel).first().click({ timeout: 4000 }); console.log("clicked", sel); break; } catch {}
+}
+await page.waitForTimeout(8000);
 
 console.log(`total captured responses: ${captured.length}`);
 await mkdir("captured", { recursive: true });
@@ -76,6 +112,8 @@ for (let i = 0; i < captured.length; i++) {
     `// ${captured[i].url}\n${captured[i].body}`,
   );
 }
+await writeFile("captured/_requests.json", JSON.stringify(requestLog, null, 2));
+console.log(`logged ${requestLog.length} /services/ requests`);
 
 // === 第一次實跑後，依 captured/ 的真實結構實作 ===
 function parseOdds(_captured) {
