@@ -75,6 +75,23 @@ const pre = await extractCoupon();
 console.log(`  賽前 ${pre.length} 場`);
 coupon.push(...pre);
 
+// --- 冠軍盤（同頁切「冠軍及特別項目」分頁）---
+let outrightItems = [];
+try {
+  await page.getByText("冠軍及特別項目", { exact: false }).first().click({ timeout: 8000 });
+  await page.waitForTimeout(7000);
+  outrightItems = await page.evaluate(() => {
+    const out = [];
+    document.querySelectorAll('[role="checkbox"][aria-label^="2026世界盃冠軍 - "]').forEach((el) => {
+      const m = (el.getAttribute("aria-label") || "").match(/^2026世界盃冠軍 - (.+) - odds ([\d.]+)$/);
+      if (m) out.push({ team: m[1], odds: parseFloat(m[2]) });
+    });
+    return out;
+  });
+  console.log(`  冠軍盤 ${outrightItems.length} 隊`);
+  // 切回賽事分頁供後續（場中頁是另開網址，這裡不必）
+} catch (e) { console.log("  冠軍盤略過:", e.message); }
+
 // --- 場中頁（cookie/cf_clearance 已在 context，免再過質詢）---
 try {
   console.log("抓取場中頁 ...");
@@ -140,5 +157,18 @@ if (allSnaps.length) {
 }
 console.log(`✅ 寫入 ${total} 筆台灣運彩賠率，對映 ${matched.size} 場`);
 [...matched].forEach((m) => console.log("  ✓ " + m));
+
+// 冠軍盤寫入（team 中文名 → TLA）
+if (outrightItems.length) {
+  const items = outrightItems.map((o) => ({ team_id: zhToTla[o.team], odds: o.odds })).filter((x) => x.team_id);
+  if (items.length) {
+    const res = await fetch(`${API_BASE}/api/admin/outright-ingest`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-admin-key": ADMIN_KEY },
+      body: JSON.stringify({ source: "tw", items }),
+    });
+    console.log(`✅ 冠軍盤寫入 ${(await res.json()).inserted} 隊`);
+  }
+}
 
 await browser.close();

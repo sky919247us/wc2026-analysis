@@ -382,6 +382,29 @@ async function loadReport(matchId) {
   }
 }
 
+/* ---------- 冠軍盤 ---------- */
+async function loadOutright() {
+  const el = document.getElementById("outright-body");
+  try {
+    const d = await api("/api/outright");
+    const board = d.board || [];
+    if (!board.length) { el.innerHTML = '<p class="muted">冠軍盤資料尚未同步</p>'; return; }
+    const hasTw = board.some((b) => b.twOdds != null);
+    const rows = board.map((b, i) => `<tr>
+      <td>${i + 1}</td>
+      <td class="name">${flag(b.team_id)} ${b.name}</td>
+      <td><b>${(b.trueProb * 100).toFixed(1)}%</b></td>
+      <td>${b.marketOdds?.toFixed(1) ?? "-"}</td>
+      ${hasTw ? `<td>${b.twOdds?.toFixed(1) ?? "-"}</td><td class="${b.ev > 0 ? "ev-pos" : b.ev != null ? "ev-neg" : ""}">${b.ev != null ? (b.ev > 0 ? "+" : "") + (b.ev * 100).toFixed(1) + "%" : "-"}</td>` : ""}
+    </tr>`).join("");
+    el.innerHTML = `<div class="card"><table class="rec-table">
+      <tr><th>#</th><th style="text-align:left">球隊</th><th>奪冠機率</th><th>參考盤</th>${hasTw ? "<th>運彩</th><th>EV</th>" : ""}</tr>
+      ${rows}</table>
+      ${!hasTw ? '<p class="muted" style="font-size:.8rem;margin-top:10px">尚無台灣運彩冠軍賠率（需爬蟲抓取冠軍盤）。目前顯示市場真實奪冠機率排行。</p>' : ""}
+    </div>`;
+  } catch { el.innerHTML = '<p class="muted">⚠️ API 尚未連線</p>'; }
+}
+
 /* ---------- 串關建議 ---------- */
 async function loadParlays() {
   const el = document.getElementById("parlays-body");
@@ -543,3 +566,4 @@ loadAnalysis();
 loadTrack();
 loadNews();
 loadParlays();
+loadOutright();

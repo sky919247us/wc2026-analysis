@@ -15,6 +15,7 @@ import { handicapProbs } from "../models/poisson";
 import { runPredictions } from "../models/predict";
 import { settleMatches } from "../models/settle";
 import { buildParlays } from "../models/parlays";
+import { syncOutright } from "../fetchers/outright";
 import { generateReports } from "../llm/generate";
 import { fetchNews } from "../fetchers/news";
 import { handleWebhook } from "../notify/telegram";
@@ -236,6 +237,34 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     return json({ news: results });
   }
 
+  // 冠軍盤：奪冠機率榜（參考盤去水）+ 台灣運彩冠軍賠率 + EV
+  if (path === "/api/outright") {
+    const { results } = await env.DB.prepare(
+      `SELECT o.source, o.team_id, o.odds, t.name_zh, t.id,
+              (SELECT MAX(captured_at) FROM outright_odds o2 WHERE o2.team_id=o.team_id AND o2.source=o.source) AS mx
+       FROM outright_odds o
+       JOIN teams t ON t.id = o.team_id
+       WHERE o.captured_at = (SELECT MAX(captured_at) FROM outright_odds o3 WHERE o3.team_id=o.team_id AND o3.source=o.source)`,
+    ).all<{ source: string; team_id: string; odds: number; name_zh: string }>();
+
+    const byTeam: Record<string, { name: string; market?: number; tw?: number }> = {};
+    for (const r of results ?? []) {
+      const e = (byTeam[r.team_id] ??= { name: r.name_zh });
+      if (r.source === "market") e.market = r.odds;
+      else if (r.source === "tw") e.tw = r.odds;
+    }
+    // 去水：用參考盤隱含機率正規化（總和→1）
+    const rawSum = Object.values(byTeam).reduce((a, e) => a + (e.market ? 1 / e.market : 0), 0) || 1;
+    const board = Object.entries(byTeam).map(([id, e]) => {
+      const trueProb = e.market ? (1 / e.market) / rawSum : null;
+      const ev = e.tw && trueProb ? trueProb * e.tw - 1 : null;
+      return { team_id: id, name: e.name, marketOdds: e.market ?? null, twOdds: e.tw ?? null, trueProb, ev };
+    }).filter((x) => x.trueProb != null)
+      .sort((a, b) => (b.trueProb ?? 0) - (a.trueProb ?? 0));
+    const updatedAt = await env.CACHE.get("outright:lastSync");
+    return json({ updatedAt, board });
+  }
+
   // 串關建議（+EV 單注組合）
   if (path === "/api/parlays") {
     return json(await buildParlays(env));
@@ -279,6 +308,19 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/admin/news") {
       return json({ ok: true, ...(await fetchNews(env)) });
+    }
+    if (path === "/api/admin/outright") {
+      return json({ ok: true, ...(await syncOutright(env)) });
+    }
+    if (path === "/api/admin/outright-ingest" && req.method === "POST") {
+      const body = (await req.json()) as { source?: string; items?: { team_id: string; odds: number }[] };
+      if (!body.source || !Array.isArray(body.items)) return json({ error: "bad body" }, 400);
+      const now = new Date().toISOString();
+      const stmts = body.items.filter((x) => x.team_id && x.odds > 1).map((x) =>
+        env.DB.prepare(`INSERT INTO outright_odds (source, team_id, odds, captured_at) VALUES (?1,?2,?3,?4)`)
+          .bind(body.source, x.team_id, x.odds, now));
+      for (let i = 0; i < stmts.length; i += 30) await env.DB.batch(stmts.slice(i, i + 30));
+      return json({ ok: true, inserted: stmts.length });
     }
     if (path === "/api/admin/settle") {
       return json({ ok: true, ...(await settleMatches(env)) });
