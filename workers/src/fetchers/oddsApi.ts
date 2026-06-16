@@ -11,13 +11,47 @@ import { NAME_TO_TLA } from "./teamNames";
 const SPORT = "soccer_fifa_world_cup";
 const BOOKMAKERS = "pinnacle,bet365";
 
-export async function syncIntlOdds(env: Env): Promise<{ inserted: number; skipped: string[] }> {
-  if (!env.ODDS_API_KEY) throw new Error("ODDS_API_KEY not set");
+/** 所有設定的 The Odds API key（合併額度，輪替使用） */
+function oddsKeys(env: Env): string[] {
+  return [env.ODDS_API_KEY, env.ODDS_API_KEY2, env.ODDS_API_KEY3].filter((k): k is string => !!k);
+}
 
-  const url = `https://api.the-odds-api.com/v4/sports/${SPORT}/odds?regions=eu&markets=h2h,totals&bookmakers=${BOOKMAKERS}&oddsFormat=decimal&apiKey=${env.ODDS_API_KEY}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-  if (!res.ok) throw new Error(`odds-api ${res.status}: ${await res.text()}`);
-  const events = (await res.json()) as any[];
+/**
+ * 多 key 輪替抓取：每次從上次的下一把開始，平均分攤額度；
+ * 某把回 401/429（額度用盡/限流）自動跳下一把。額度與用量記到 KV 供查詢。
+ */
+async function fetchOddsRotating(env: Env): Promise<any[]> {
+  const keys = oddsKeys(env);
+  if (!keys.length) throw new Error("no ODDS_API_KEY configured");
+  const rotRaw = await env.CACHE.get("odds:rot");
+  const start = rotRaw ? parseInt(rotRaw, 10) % keys.length : 0;
+  let lastErr: unknown;
+
+  for (let i = 0; i < keys.length; i++) {
+    const idx = (start + i) % keys.length;
+    const url = `https://api.the-odds-api.com/v4/sports/${SPORT}/odds?regions=eu&markets=h2h,totals&bookmakers=${BOOKMAKERS}&oddsFormat=decimal&apiKey=${keys[idx]}`;
+    let res: Response;
+    try { res = await fetch(url, { signal: AbortSignal.timeout(30_000) }); }
+    catch (e) { lastErr = e; continue; }
+
+    if (res.ok) {
+      const remaining = res.headers.get("x-requests-remaining");
+      await env.CACHE.put("odds:rot", String((idx + 1) % keys.length));
+      if (remaining !== null) {
+        const map = JSON.parse((await env.CACHE.get("odds:remaining")) ?? "{}");
+        map[`key${idx + 1}`] = Number(remaining);
+        await env.CACHE.put("odds:remaining", JSON.stringify(map));
+      }
+      return (await res.json()) as any[];
+    }
+    // 401=額度用盡/無效, 429=限流 → 換下一把；其他錯誤也續試
+    lastErr = new Error(`odds-api key#${idx + 1} HTTP ${res.status}`);
+  }
+  throw lastErr ?? new Error("all odds keys failed");
+}
+
+export async function syncIntlOdds(env: Env): Promise<{ inserted: number; skipped: string[] }> {
+  const events = await fetchOddsRotating(env);
 
   // 把 odds-api 的隊名配對到我們的 match：同兩隊 + 開賽時間誤差 < 2 小時
   const { results: upcoming } = await env.DB.prepare(

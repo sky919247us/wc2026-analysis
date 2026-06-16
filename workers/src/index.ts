@@ -82,19 +82,36 @@ async function runOddsPapiSync(env: Env): Promise<void> {
   }
 }
 
-/** 自適應：僅在比賽日、且距上次抓取 ≥88 分鐘時才抓 The Odds API */
+/**
+ * 自適應抓取（3 把 key = 1500 點/月）：分層頻率
+ *   臨場（開球前 75 分內 或 進行中）→ 每 ~20 分鐘
+ *   比賽日其他時段（開球在 +12h 內）   → 每 ~90 分鐘
+ *   無比賽                             → 不抓
+ */
 async function maybeSyncOdds(env: Env): Promise<void> {
-  // 比賽日判定：有 SCHEDULED 比賽於未來 12h 內開球，或有進行中（開球在過去 2.5h 內）
-  const active = await env.DB.prepare(
+  const hot = await env.DB.prepare(
     `SELECT COUNT(*) AS n FROM matches
      WHERE status != 'FINISHED'
-       AND kickoff_utc <= datetime('now', '+12 hours')
+       AND kickoff_utc <= datetime('now', '+75 minutes')
        AND kickoff_utc >= datetime('now', '-2.5 hours')`,
   ).first<{ n: number }>();
-  if (!active || active.n === 0) return; // 無比賽 → 不抓
+
+  let thresholdMin: number;
+  if (hot && hot.n > 0) {
+    thresholdMin = 18; // 臨場高頻
+  } else {
+    const matchDay = await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM matches
+       WHERE status != 'FINISHED'
+         AND kickoff_utc <= datetime('now', '+12 hours')
+         AND kickoff_utc >= datetime('now', '-2.5 hours')`,
+    ).first<{ n: number }>();
+    if (!matchDay || matchDay.n === 0) return; // 無比賽 → 不抓
+    thresholdMin = 88;
+  }
 
   const last = await env.CACHE.get("odds:lastSync");
-  if (last && Date.now() - new Date(last).getTime() < 88 * 60_000) return; // 未滿 ~90 分鐘
+  if (last && Date.now() - new Date(last).getTime() < thresholdMin * 60_000) return;
 
   await runIntlOddsSync(env);
 }

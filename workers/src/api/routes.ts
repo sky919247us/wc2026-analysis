@@ -40,7 +40,9 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
 
   if (path === "/api/health") {
     const lastSync = await env.CACHE.get("matches:lastSync");
-    return json({ ok: true, lastSync });
+    const oddsSync = await env.CACHE.get("odds:lastSync");
+    const oddsRemaining = JSON.parse((await env.CACHE.get("odds:remaining")) ?? "null");
+    return json({ ok: true, lastSync, oddsSync, oddsRemaining });
   }
 
   if (path === "/api/matches") {
