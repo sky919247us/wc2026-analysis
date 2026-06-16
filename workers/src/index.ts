@@ -60,6 +60,9 @@ export default {
     const hasLLM = env.GEMINI_API_KEY || env.OPENAI_API_KEY || env.ANTHROPIC_API_KEY;
     if (minute === 10 && hasLLM) ctx.waitUntil(runReportGen(env));
 
+    // 每 30 分鐘：新聞 RSS 聚合
+    if (minute % 30 === 0) ctx.waitUntil(fetchNews(env).then(() => {}).catch((e) => console.error("news", e)));
+
     // 每小時 30 分：先同步最新比分，再賽後對帳（更新戰績 + 完賽隊 Elo）
     if (minute === 30) ctx.waitUntil(runFixtureSync(env).then(() => settleMatches(env)).then(() => {}));
   },

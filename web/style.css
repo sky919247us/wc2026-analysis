@@ -145,6 +145,17 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
 .report-md { background: var(--panel); border-radius: 12px; padding: 18px; line-height: 1.7; white-space: pre-wrap; }
 .disclaimer { font-size: .8rem; color: var(--muted); margin-top: 16px; padding: 10px; border: 1px dashed #ffffff20; border-radius: 8px; }
 
+/* ---- 新聞 ---- */
+.nfilter { background: transparent; color: var(--muted); border: 1px solid transparent; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
+.nfilter.active { background: var(--accent); color: #fff; }
+.news-item { display: block; text-decoration: none; color: inherit; }
+.news-item:hover { border-color: var(--accent2); }
+.news-src { font-size: .78rem; color: var(--accent2); }
+.news-tag { font-size: .7rem; background: var(--accent); color: #fff; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
+.news-title { font-size: 1.02rem; font-weight: 600; margin: 6px 0; }
+.news-sum { font-size: .88rem; color: var(--muted); line-height: 1.5; }
+.news-time { font-size: .75rem; color: var(--muted); margin-top: 6px; }
+
 /* ---- 戰績頁 ---- */
 .track-hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px; }
 .track-stat { background: var(--panel); border: 1px solid #ffffff10; border-radius: 14px; padding: 20px; text-align: center; }

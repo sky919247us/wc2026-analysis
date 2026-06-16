@@ -340,6 +340,34 @@ async function loadReport(matchId) {
   }
 }
 
+/* ---------- 新聞中心 ---------- */
+async function loadNews(tag = "worldcup") {
+  const el = document.getElementById("news-list");
+  el.innerHTML = '<p class="muted">載入中…</p>';
+  try {
+    const data = await api(`/api/news${tag ? `?tag=${tag}` : ""}`);
+    const news = data.news || [];
+    if (!news.length) { el.innerHTML = '<p class="muted">尚無新聞（每 30 分鐘自動更新）</p>'; return; }
+    el.innerHTML = news.map((n) => {
+      const t = n.published_at ? new Date(n.published_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+      return `<a class="card news-item" href="${n.url}" target="_blank" rel="noopener">
+        <span class="news-src">${n.source}</span>${n.tags === "worldcup" ? '<span class="news-tag">世界盃</span>' : ""}
+        <div class="news-title">${n.title}</div>
+        ${n.summary ? `<div class="news-sum">${n.summary}</div>` : ""}
+        <div class="news-time">${t}</div>
+      </a>`;
+    }).join("");
+  } catch {
+    el.innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';
+  }
+}
+document.querySelectorAll(".nfilter").forEach((b) =>
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".nfilter").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    loadNews(b.dataset.ntag);
+  }));
+
 /* ---------- 戰績頁 ---------- */
 const selZh = (s) => ({ home: "主勝", draw: "平局", away: "客勝" }[s] || s);
 
@@ -431,3 +459,4 @@ loadStandings();
 loadTeams();
 loadAnalysis();
 loadTrack();
+loadNews();
