@@ -14,6 +14,7 @@ import { evForMarket } from "../models/ev";
 import { runPredictions } from "../models/predict";
 import { settleMatches } from "../models/settle";
 import { generateReports } from "../llm/generate";
+import { fetchNews } from "../fetchers/news";
 import { handleWebhook } from "../notify/telegram";
 
 const JSON_HEADERS = {
@@ -193,6 +194,18 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     });
   }
 
+  // 新聞中心（?tag=worldcup 只看世界盃相關）
+  if (path === "/api/news") {
+    const tag = url.searchParams.get("tag");
+    const where = tag ? "WHERE tags = ?1" : "";
+    const stmt = env.DB.prepare(
+      `SELECT source, title, url, summary, lang, tags, published_at, fetched_at
+       FROM news ${where} ORDER BY COALESCE(published_at, fetched_at) DESC LIMIT 60`,
+    );
+    const { results } = await (tag ? stmt.bind(tag) : stmt).all();
+    return json({ news: results });
+  }
+
   // 最近的盤口異動警報
   if (path === "/api/alerts") {
     const { results } = await env.DB.prepare(
@@ -228,6 +241,9 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/admin/predict") {
       return json({ ok: true, predictions: await runPredictions(env) });
+    }
+    if (path === "/api/admin/news") {
+      return json({ ok: true, ...(await fetchNews(env)) });
     }
     if (path === "/api/admin/settle") {
       return json({ ok: true, ...(await settleMatches(env)) });

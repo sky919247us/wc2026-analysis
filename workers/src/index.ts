@@ -11,6 +11,7 @@ import { syncOddsPapi } from "./fetchers/oddsPapi";
 import { runPredictions } from "./models/predict";
 import { settleMatches } from "./models/settle";
 import { generateReports } from "./llm/generate";
+import { fetchNews } from "./fetchers/news";
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
