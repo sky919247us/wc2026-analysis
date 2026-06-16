@@ -138,7 +138,12 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     const matchId = url.searchParams.get("match_id");
     if (matchId) {
       const row = await env.DB.prepare(
-        `SELECT * FROM predictions WHERE match_id = ?1 ORDER BY created_at DESC LIMIT 1`,
+        `SELECT p.*, h.name_zh AS home_zh, a.name_zh AS away_zh, m.kickoff_utc, m.stage
+         FROM predictions p
+         JOIN matches m ON m.id = p.match_id
+         JOIN teams h ON h.id = m.home_id
+         JOIN teams a ON a.id = m.away_id
+         WHERE p.match_id = ?1 ORDER BY p.created_at DESC LIMIT 1`,
       ).bind(matchId).first();
       return json({ prediction: row });
     }

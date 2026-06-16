@@ -187,6 +187,52 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
 
 footer { padding: 20px; text-align: center; font-size: .85rem; color: var(--muted); border-top: 1px solid #ffffff10; }
 .muted { color: var(--muted); }
-@media (max-width: 640px) {
-  header { flex-direction: column; gap: 10px; }
+/* ============ 手機 RWD（<=720px）============ */
+@media (max-width: 720px) {
+  /* 頁首：品牌在上，分頁列改為可橫向捲動（避免 8 個分頁擠成多排）*/
+  header { flex-direction: column; align-items: stretch; gap: 10px; padding: 10px 12px; }
+  .brand { font-size: 1.1rem; }
+  nav { flex-wrap: nowrap; overflow-x: auto; gap: 6px; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  nav::-webkit-scrollbar { display: none; }
+  .tab { flex: 0 0 auto; padding: 7px 12px; font-size: .9rem; }
+
+  main { padding: 14px 10px; }
+
+  /* 卡片：縮排距，過寬內容（表格）可橫向捲動 */
+  .card { padding: 13px 14px; overflow-x: auto; }
+
+  /* 比分盤：隊名縮小、避免擠壓 */
+  .match { gap: 8px; }
+  .match .team { font-size: .92rem; }
+  .match .score { font-size: 1.2rem; }
+
+  /* 表格：縮小字與間距 */
+  table, .ev-table, .rec-table { font-size: .82rem; }
+  th, td, .ev-table th, .ev-table td, .rec-table th, .rec-table td { padding: 6px 5px; }
+
+  /* 詳情彈窗：近全螢幕、縮內距 */
+  .overlay { padding: 8px; }
+  .overlay-box { padding: 18px 14px; max-height: 94vh; border-radius: 14px; }
+  .dt-title { font-size: 1.15rem; }
+  .dt-top { gap: 14px; }
+  .dt-stat { padding: 10px 12px; min-width: 84px; }
+  .dt-stat .v { font-size: 1.25rem; }
+  .ring { width: 80px; height: 80px; }
+
+  /* 首頁推薦 / 標題 */
+  .hero-head h2 { font-size: 1.3rem; }
+  .picks-grid, .grid { grid-template-columns: 1fr; }
+
+  /* 戰績指標：縮字 */
+  .track-hero { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .track-stat { padding: 14px; }
+  .track-stat .big { font-size: 1.6rem; }
+
+  /* 串關：指標換行、不溢出 */
+  .parlay-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .parlay-metrics { flex-wrap: wrap; gap: 10px; }
+  .value-leg { font-size: .8rem; }
+
+  /* Poisson 比分格：2 欄較不擁擠 */
+  .score-grid { grid-template-columns: repeat(2, 1fr); }
 }
