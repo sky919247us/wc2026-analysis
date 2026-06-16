@@ -1,148 +1,99 @@
 /**
- * 台灣運彩賠率爬蟲（方案 A）
+ * 台灣運彩賠率爬蟲（在本機執行，headful 通過 Cloudflare）
  *
- * 跑在 GitHub Actions（或任何有瀏覽器的環境），用 Playwright 開真實 Chromium
- * 通過 Cloudflare Managed Challenge，攔截 SPA 載入賠率時的 XHR/fetch 回應，
- * 解析後 POST 回 Worker 的 /api/admin/odds-ingest 存入 D1。
+ * 抓兩個頁面：
+ *   賽前：/sportsbook/sport/足球/34740.1（2026世界盃 coupon）
+ *   場中：/sportsbook/in-play（進行中比賽，賠率在此而非賽前頁）
+ * 用 aria-label 解析（不讓分=1x2、[總分]大小2.5=大小球），對映我們的 match，
+ * POST 進 /api/admin/odds-ingest（source="tw"）。
  *
- * 環境變數：
- *   WC_API_BASE   Worker 網址（預設正式站）
- *   WC_ADMIN_KEY  寫入口密鑰（必填）
+ * 鎖盤/關盤處理：附加式快照——鎖盤的場次這輪抓不到值就略過，
+ * 資料庫保留上一次的最新快照，下輪有新值再更新（不會洗掉舊資料）。
  *
- * ⚠️ 攔截到的 API 結構要等第一次實跑才能確認 —— 先把所有 JSON 回應
- *    存到 captured/ 供分析，確認結構後再填 parseOdds()。
+ * 環境變數：WC_API_BASE、WC_ADMIN_KEY、HEADLESS（0=開視窗，過質詢用）
  */
 import { chromium } from "playwright";
-import { mkdir, writeFile } from "node:fs/promises";
 
 const API_BASE = process.env.WC_API_BASE ?? "https://wc2026-api.sky919247us.workers.dev";
 const ADMIN_KEY = process.env.WC_ADMIN_KEY;
-// 足球 coupon 直達網址（節點 34740.1）——不需登入即顯示「2026世界盃」全部賠率
-const TARGET = `https://www.sportslottery.com.tw/sportsbook/sport/${encodeURIComponent("足球")}/34740.1`;
+if (!ADMIN_KEY) { console.error("WC_ADMIN_KEY not set"); process.exit(1); }
 
-if (!ADMIN_KEY) {
-  console.error("WC_ADMIN_KEY not set");
-  process.exit(1);
-}
+const PRE_URL = `https://www.sportslottery.com.tw/sportsbook/sport/${encodeURIComponent("足球")}/34740.1`;
+const LIVE_URL = "https://www.sportslottery.com.tw/sportsbook/in-play";
 
-const captured = [];
-
-const HEADLESS = process.env.HEADLESS !== "0"; // HEADLESS=0 開真實視窗（較易過 Cloudflare 質詢）
 const browser = await chromium.launch({
-  headless: HEADLESS,
+  headless: process.env.HEADLESS !== "0",
   args: ["--disable-blink-features=AutomationControlled"],
 });
 const ctx = await browser.newContext({
-  locale: "zh-TW",
-  timezoneId: "Asia/Taipei",
-  userAgent:
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  locale: "zh-TW", timezoneId: "Asia/Taipei",
+  userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
   viewport: { width: 1366, height: 900 },
 });
 const page = await ctx.newPage();
 
-const requestLog = [];
-// 記錄所有 /services/ 請求（method + url + POST body）→ 找賠率端點規律
-page.on("request", (req) => {
-  const u = req.url();
-  if (/\/services\//.test(u)) {
-    requestLog.push({ method: req.method(), url: u, post: req.postData() ?? null });
+async function passChallenge() {
+  for (let i = 0; i < 12; i++) {
+    if (!/just a moment/i.test(await page.title())) return;
+    await page.waitForTimeout(5000);
   }
-});
-
-// 攔截 /services/ 的 JSON 回應全留（賠率就在其中）
-page.on("response", async (res) => {
-  try {
-    const url = res.url();
-    if (!/\/services\//.test(url)) return;
-    const ct = res.headers()["content-type"] ?? "";
-    if (!ct.includes("json")) return;
-    const body = await res.text();
-    captured.push({ url, body });
-    console.log(`captured: ${url} (${body.length} bytes)`);
-  } catch { /* response already disposed */ }
-});
-
-console.log(`navigating to ${TARGET} ...`);
-await page.goto(TARGET, { waitUntil: "domcontentloaded", timeout: 60_000 });
-
-// 等 Cloudflare 質詢通過（頁面標題離開 "Just a moment..."）
-for (let i = 0; i < 12; i++) {
-  const title = await page.title();
-  if (!/just a moment/i.test(title)) break;
-  console.log(`waiting for challenge... (${title})`);
-  await page.waitForTimeout(5000);
+}
+async function acceptCookie() {
+  for (const kw of ["接受", "Accept", "我同意", "同意"]) {
+    try { const b = page.getByText(kw, { exact: true }).first(); if (await b.count()) { await b.click({ timeout: 4000 }); await page.waitForTimeout(1200); return; } } catch {}
+  }
 }
 
-await page.waitForTimeout(8000);
-await mkdir("captured", { recursive: true });
-
-// 勘查模式：把渲染後的 DOM + 截圖存下，分析賠率元素結構
-async function snapshot(tag) {
-  try {
-    await page.screenshot({ path: `captured/${tag}.png`, fullPage: true });
-    await writeFile(`captured/${tag}.html`, await page.content());
-    // 掃描畫面上「賠率樣式」的數字（1.01~99.0）與其所在元素結構
-    const probe = await page.evaluate(() => {
-      const out = [];
-      const re = /^\d{1,2}\.\d{1,2}$/;
-      const all = document.querySelectorAll("*");
-      let count = 0;
-      for (const el of all) {
-        const t = (el.textContent || "").trim();
-        if (re.test(t) && el.children.length === 0) {
-          count++;
-          if (out.length < 8) {
-            // 往上 4 層記下 class，幫助找選擇器
-            let p = el, chain = [];
-            for (let i = 0; i < 4 && p; i++) { chain.push(`${p.tagName}.${(p.className||"").toString().slice(0,40)}`); p = p.parentElement; }
-            out.push({ odds: t, chain });
-          }
-        }
+/** 依 DOM 順序擷取：每場 = 2 隊名(客,主) + 其後賠率格(aria-label) */
+function extractCoupon() {
+  return page.evaluate(() => {
+    const nodes = document.querySelectorAll('p.fwtEZm, [role="checkbox"][aria-label*=" - odds "]');
+    const matches = [];
+    let cur = null, names = [];
+    for (const el of nodes) {
+      if (el.tagName === "P") {
+        names.push(el.textContent.trim());
+        if (names.length === 2) { cur = { away: names[0], home: names[1], sel: [] }; matches.push(cur); names = []; }
+      } else if (cur) {
+        const m = (el.getAttribute("aria-label") || "").match(/^(.*) - (.*) - odds ([\d.]+)$/);
+        if (m) cur.sel.push({ market: m[1], selection: m[2], odds: parseFloat(m[3]) });
+        names = [];
       }
-      return { oddsLikeCount: count, samples: out };
-    });
-    console.log(`[${tag}] 賠率樣式數字: ${probe.oddsLikeCount}`);
-    probe.samples.forEach(s => console.log(`  ${s.odds}  <= ${s.chain.join(" < ")}`));
-  } catch (e) { console.log(`snapshot ${tag} failed: ${e.message}`); }
-}
-
-// 接受 cookie
-for (const kw of ["接受", "Accept", "我同意", "同意"]) {
-  try { const b = page.getByText(kw, { exact: true }).first(); if (await b.count()) { await b.click({ timeout: 4000 }); await page.waitForTimeout(1500); break; } } catch {}
-}
-await page.waitForTimeout(8000); // 等世界盃賠率渲染
-
-// 依 DOM 順序擷取：每場 = 2 隊名(客,主) + 其後的賠率格(aria-label)
-const coupon = await page.evaluate(() => {
-  const nodes = document.querySelectorAll('p.fwtEZm, [role="checkbox"][aria-label*=" - odds "]');
-  const matches = [];
-  let cur = null, names = [];
-  for (const el of nodes) {
-    if (el.tagName === "P") {
-      names.push(el.textContent.trim());
-      if (names.length === 2) { cur = { away: names[0], home: names[1], sel: [] }; matches.push(cur); names = []; }
-    } else if (cur) {
-      const lbl = el.getAttribute("aria-label"); // "市場 - 選項 - odds 1.18"
-      const m = lbl.match(/^(.*) - (.*) - odds ([\d.]+)$/);
-      if (m) cur.sel.push({ market: m[1], selection: m[2], odds: parseFloat(m[3]) });
-      names = []; // 賠率出現後重置隊名累積
     }
-  }
-  return matches.filter((x) => x.sel.length);
-});
-console.log(`擷取到 ${coupon.length} 場運彩賠率`);
+    return matches.filter((x) => x.sel.length);
+  });
+}
 
-// 取我們的未開賽比賽 + 球隊中文名→TLA
-const ourMatches = (await (await fetch(`${API_BASE}/api/matches?upcoming=1`)).json()).matches ?? [];
+const coupon = [];
+// --- 賽前頁（同時負責通過 Cloudflare 質詢、接受 cookie）---
+console.log("抓取賽前頁 ...");
+await page.goto(PRE_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+await passChallenge();
+await acceptCookie();
+await page.waitForTimeout(8000);
+const pre = await extractCoupon();
+console.log(`  賽前 ${pre.length} 場`);
+coupon.push(...pre);
+
+// --- 場中頁（cookie/cf_clearance 已在 context，免再過質詢）---
+try {
+  console.log("抓取場中頁 ...");
+  await page.goto(LIVE_URL, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await passChallenge();
+  await page.waitForTimeout(8000);
+  const live = await extractCoupon();
+  console.log(`  場中 ${live.length} 場`);
+  coupon.push(...live);
+} catch (e) { console.log("  場中頁略過:", e.message); }
+
+// --- 對映我們的 match 並寫入 ---
+const ourMatches = (await (await fetch(`${API_BASE}/api/matches`)).json()).matches ?? [];
 const teams = (await (await fetch(`${API_BASE}/api/teams`)).json()).teams ?? [];
 const zhToTla = {};
 for (const t of teams) zhToTla[t.name_zh] = t.id;
-// 台灣運彩用名 → 我們的 TLA 別名
 Object.assign(zhToTla, { "波赫": "BIH", "民主剛果": "COD", "韓國": "KOR", "南韓": "KOR" });
 
 function toSnapshots(c) {
-  // 兩隊（順序不定）→ TLA；用集合配對我們的 match，再依 DB 主客標記
   const t1 = zhToTla[c.away], t2 = zhToTla[c.home];
   if (!t1 || !t2) return null;
   const match = ourMatches.find((m) =>
@@ -152,40 +103,34 @@ function toSnapshots(c) {
   const snaps = [];
   for (const s of c.sel) {
     if (s.market === "不讓分") {
-      let sel = null;
-      if (s.selection === "和局") sel = "draw";
-      else {
-        const selTla = zhToTla[s.selection]; // 該選項隊伍 → 對映我們 DB 的主/客
-        if (selTla === match.home_id) sel = "home";
-        else if (selTla === match.away_id) sel = "away";
-      }
+      let sel = s.selection === "和局" ? "draw"
+        : zhToTla[s.selection] === match.home_id ? "home"
+        : zhToTla[s.selection] === match.away_id ? "away" : null;
       if (sel) snaps.push({ match_id: mid, market: "1x2", selection: sel, odds: s.odds });
     } else if (s.market.includes("大小")) {
       const sel = s.selection.startsWith("大") ? "over" : s.selection.startsWith("小") ? "under" : null;
       if (sel) snaps.push({ match_id: mid, market: "total", line: 2.5, selection: sel, odds: s.odds });
     }
   }
-  return { mid, label: `${match.home_zh} vs ${match.away_zh}`, snaps };
+  return { label: `${match.home_zh} vs ${match.away_zh}`, snaps };
 }
 
-let total = 0; const matched = [], unmatched = [];
-const allSnaps = [];
+// 同場可能賽前+場中都抓到 → 合併快照（皆寫入，讀取時取最新）
+const allSnaps = [], matched = new Set();
 for (const c of coupon) {
   const r = toSnapshots(c);
-  if (r && r.snaps.length) { allSnaps.push(...r.snaps); matched.push(r.label); }
-  else unmatched.push(`${c.away} @ ${c.home}`);
+  if (r && r.snaps.length) { allSnaps.push(...r.snaps); matched.add(r.label); }
 }
+let total = 0;
 if (allSnaps.length) {
   const res = await fetch(`${API_BASE}/api/admin/odds-ingest`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-admin-key": ADMIN_KEY },
     body: JSON.stringify({ source: "tw", snapshots: allSnaps }),
   });
-  const j = await res.json();
-  total = j.inserted ?? 0;
+  total = (await res.json()).inserted ?? 0;
 }
-console.log(`✅ 寫入 ${total} 筆台灣運彩賠率，對映 ${matched.length} 場`);
-matched.forEach((m) => console.log("  ✓ " + m));
-if (unmatched.length) { console.log(`未對映 ${unmatched.length} 場：`); unmatched.forEach((m) => console.log("  ✗ " + m)); }
+console.log(`✅ 寫入 ${total} 筆台灣運彩賠率，對映 ${matched.size} 場`);
+[...matched].forEach((m) => console.log("  ✓ " + m));
 
 await browser.close();

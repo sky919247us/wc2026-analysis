@@ -224,6 +224,8 @@ async function openDetail(matchId) {
     const d = JSON.parse(p.detail_json);
     const pd = d.poissonDetail;
 
+    const twAt = oddsRes.sources?.tw?.["1x2"]?.home?.at;
+    const twTime = twAt ? new Date(twAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : null;
     const evRows = oddsRes.tw_ev
       ? oddsRes.tw_ev.map((e) => {
           const lbl = { home: "主勝", draw: "平局", away: "客勝" }[e.selection];
@@ -271,7 +273,7 @@ async function openDetail(matchId) {
         <h4>💰 台灣運彩期望值 (EV)</h4>
         ${evRows
           ? `<table class="ev-table"><tr><th>玩法</th><th>運彩賠率</th><th>真實機率</th><th>EV</th></tr>${evRows}</table>
-             <p class="muted" style="font-size:.8rem;margin-top:8px">EV 為正代表該玩法在台灣運彩有價值（以 Pinnacle 去水機率為基準）</p>`
+             <p class="muted" style="font-size:.8rem;margin-top:8px">EV 為正代表該玩法在台灣運彩有價值（以 Pinnacle 去水機率為基準）${twTime ? `・運彩賠率資料時間：${twTime}` : ""}</p>`
           : `<p class="muted">尚未取得台灣運彩 / Pinnacle 賠率對比資料。賠率資料接上後此處顯示各玩法期望值。</p>`}
       </div>
 
