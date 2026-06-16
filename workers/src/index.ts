@@ -74,10 +74,40 @@ export default {
     if (minute === 0 && hour === 8 && env.TELEGRAM_BOT_TOKEN)
       ctx.waitUntil(pushDailyValue(env).catch((e) => console.error("dailyPush", e)));
 
+    // 每 5 分鐘：開賽前約 1 小時的賽事提醒（KV 去重，每場推一次）
+    if (env.TELEGRAM_BOT_TOKEN) ctx.waitUntil(runKickoffReminders(env).catch((e) => console.error("remind", e)));
+
     // 每小時 30 分：先同步最新比分，再賽後對帳（更新戰績 + 完賽隊 Elo）
     if (minute === 30) ctx.waitUntil(runFixtureSync(env).then(() => settleMatches(env)).then(() => {}));
   },
 } satisfies ExportedHandler<Env>;
+
+/** 開賽前約 1 小時的賽事提醒（含 AI 看好方），每場僅推一次 */
+async function runKickoffReminders(env: Env): Promise<void> {
+  const { results } = await env.DB.prepare(
+    `SELECT m.id, h.name_zh AS home_zh, a.name_zh AS away_zh,
+            p.prob_home, p.prob_draw, p.prob_away, p.confidence
+     FROM matches m
+     JOIN teams h ON h.id = m.home_id JOIN teams a ON a.id = m.away_id
+     LEFT JOIN (SELECT match_id, MAX(created_at) mx FROM predictions GROUP BY match_id) lp ON lp.match_id = m.id
+     LEFT JOIN predictions p ON p.match_id = m.id AND p.created_at = lp.mx
+     WHERE m.status = 'SCHEDULED'
+       AND m.kickoff_utc >= datetime('now', '+50 minutes')
+       AND m.kickoff_utc <= datetime('now', '+65 minutes')`,
+  ).all<{ id: string; home_zh: string; away_zh: string; prob_home: number; prob_draw: number; prob_away: number; confidence: number }>();
+
+  for (const m of results ?? []) {
+    if (await env.CACHE.get(`remind:${m.id}`)) continue;
+    let pick = "尚無預測";
+    if (m.prob_home != null) {
+      const mx = Math.max(m.prob_home, m.prob_draw, m.prob_away);
+      const sel = mx === m.prob_home ? `${m.home_zh} 勝` : mx === m.prob_away ? `${m.away_zh} 勝` : "和局";
+      pick = `${sel}（${(mx * 100).toFixed(0)}%）・信心 ${m.confidence}`;
+    }
+    await broadcast(env, `⏰ <b>賽前提醒</b>\n\n⚽ ${m.home_zh} vs ${m.away_zh}　約 1 小時後開賽\n🔮 AI 看好：${pick}\n\n<i>僅供參考・理性投注</i>`);
+    await env.CACHE.put(`remind:${m.id}`, "1", { expirationTtl: 21600 });
+  }
+}
 
 /** 每日推播：今日 +EV 精選單注 + 最佳串關 */
 async function pushDailyValue(env: Env): Promise<void> {

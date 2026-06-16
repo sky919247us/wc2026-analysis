@@ -14,6 +14,17 @@ const FLAGS = {
 };
 const flag = (tla) => FLAGS[tla] || "🏳️";
 
+/* 自選關注（localStorage，無需登入） */
+const FAV_KEY = "wc:favs";
+const getFavs = () => { try { return JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); } catch { return []; } };
+const isFav = (tla) => getFavs().includes(tla);
+function toggleFav(tla) {
+  const f = getFavs();
+  const i = f.indexOf(tla);
+  if (i >= 0) f.splice(i, 1); else f.push(tla);
+  localStorage.setItem(FAV_KEY, JSON.stringify(f));
+}
+
 async function api(path) {
   const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) throw new Error(`API ${res.status}`);
@@ -78,6 +89,11 @@ document.querySelectorAll(".filter").forEach((btn) => {
       const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" });
       return renderMatches(allMatches.filter((m) =>
         new Date(m.kickoff_utc).toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" }) === today));
+    }
+    if (f === "favs") {
+      const favs = getFavs();
+      const list = allMatches.filter((m) => favs.includes(m.home_id) || favs.includes(m.away_id));
+      return renderMatches(list.length ? list : []);
     }
   });
 });
@@ -529,12 +545,20 @@ let allTeams = [];
 function renderTeams(teams) {
   const formHtml = (f) => f ? `<div class="form-row">${[...f].map((r) => `<span class="form-dot f-${r}">${r}</span>`).join("")}</div>` : "";
   document.getElementById("team-grid").innerHTML = teams.map((t) => `<div class="card team-card">
+    <button class="fav-btn ${isFav(t.id) ? "on" : ""}" data-fav="${t.id}">${isFav(t.id) ? "★" : "☆"}</button>
     <div class="tla">${flag(t.id)} ${t.id}</div>
     <div class="zh">${t.name_zh}</div>
     <div class="muted">${t.name_en}</div>
     <span class="badge">${t.grp ? `${t.grp} 組` : "分組未定"}</span>
     ${formHtml(t.form)}
   </div>`).join("") || '<p class="muted">沒有符合的球隊</p>';
+  document.querySelectorAll("[data-fav]").forEach((b) =>
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleFav(b.dataset.fav);
+      b.classList.toggle("on");
+      b.textContent = b.classList.contains("on") ? "★" : "☆";
+    }));
 }
 async function loadTeams() {
   try {

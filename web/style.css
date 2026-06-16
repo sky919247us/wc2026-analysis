@@ -61,7 +61,10 @@ td.name { text-align: left; font-weight: 600; }
 tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
 .group-title { color: var(--accent2); font-weight: 700; margin-bottom: 8px; }
 .team-card { text-align: center; }
+.team-card { position: relative; }
 .team-card .tla { font-size: 1.6rem; font-weight: 800; color: var(--accent2); }
+.fav-btn { position: absolute; top: 8px; right: 10px; background: none; border: none; color: var(--muted); font-size: 1.3rem; cursor: pointer; line-height: 1; }
+.fav-btn.on { color: var(--gold); }
 .team-card .zh { font-size: 1.1rem; font-weight: 600; margin: 4px 0; }
 .form-row { display: flex; gap: 4px; justify-content: center; margin-top: 8px; }
 .form-dot { width: 18px; height: 18px; border-radius: 4px; font-size: .7rem; font-weight: 700; display: grid; place-items: center; color: #fff; }
