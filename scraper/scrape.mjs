@@ -110,6 +110,14 @@ function toSnapshots(c) {
     } else if (s.market.includes("大小")) {
       const sel = s.selection.startsWith("大") ? "over" : s.selection.startsWith("小") ? "under" : null;
       if (sel) snaps.push({ match_id: mid, market: "total", line: 2.5, selection: sel, odds: s.odds });
+    } else if (s.market.startsWith("讓分")) {
+      // "讓分 3:0 - 海地 3:0 - odds 1.65" → 歐洲讓分（整數讓球）
+      const line = parseInt((s.market.match(/(\d+):0/) || [])[1] || "0", 10);
+      const teamTxt = s.selection.replace(/\s*\d+:0\s*$/, "").trim();
+      let sel = teamTxt === "和局" ? "draw"
+        : zhToTla[teamTxt] === match.home_id ? "home"
+        : zhToTla[teamTxt] === match.away_id ? "away" : null;
+      if (sel && line > 0) snaps.push({ match_id: mid, market: "handicap", line, selection: sel, odds: s.odds });
     }
   }
   return { label: `${match.home_zh} vs ${match.away_zh}`, snaps };

@@ -11,6 +11,7 @@ import { syncIntlOdds } from "../fetchers/oddsApi";
 import { syncOddsPapi } from "../fetchers/oddsPapi";
 import { handleIngest } from "./ingest";
 import { evForMarket } from "../models/ev";
+import { handicapProbs } from "../models/poisson";
 import { runPredictions } from "../models/predict";
 import { settleMatches } from "../models/settle";
 import { buildParlays } from "../models/parlays";
@@ -362,5 +363,29 @@ async function buildOddsView(env: Env, matchId: string) {
       evView.push({ market: "total", label: SEL_ZH[e.selection], ...e });
   }
 
-  return { match_id: matchId, sources: view, tw_ev: evView.length ? evView : null };
+  // 讓分盤（歐洲讓分）模型 EV：用 Poisson margin 機率 × 運彩讓分賠率
+  let twHandicap = null;
+  const twH = view.tw?.handicap;
+  if (twH) {
+    const pred = await env.DB.prepare(
+      `SELECT xg_home, xg_away FROM predictions WHERE match_id = ?1 ORDER BY created_at DESC LIMIT 1`,
+    ).bind(matchId).first<{ xg_home: number; xg_away: number }>();
+    // 取讓分線（slot 形如 home@3 / draw@3 / away@3）
+    const lineMatch = Object.keys(twH)[0]?.match(/@(\d+)/);
+    const line = lineMatch ? Number(lineMatch[1]) : null;
+    if (pred && line) {
+      const hp = handicapProbs(pred.xg_home, pred.xg_away, line);
+      const map: [string, string, number][] = [
+        [`home@${line}`, `主隊讓分`, hp.homeCover],
+        [`draw@${line}`, `讓分和局`, hp.push],
+        [`away@${line}`, `客隊讓分`, hp.awayCover],
+      ];
+      const rows = map.filter(([slot]) => twH[slot]).map(([slot, label, prob]) => ({
+        label: `${label}(讓${line}球)`, twOdds: twH[slot].odds, trueProb: prob, ev: prob * twH[slot].odds - 1,
+      }));
+      if (rows.length) twHandicap = rows;
+    }
+  }
+
+  return { match_id: matchId, sources: view, tw_ev: evView.length ? evView : null, tw_handicap: twHandicap };
 }

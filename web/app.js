@@ -266,6 +266,12 @@ async function openDetail(matchId) {
         </div>
       </div>
 
+      ${oddsRes.tw_handicap ? `<div class="dt-section">
+        <h4>🅗 台灣運彩讓分盤（模型 EV）</h4>
+        <table class="ev-table"><tr><th>玩法</th><th>運彩賠率</th><th>模型機率</th><th>EV</th></tr>
+        ${oddsRes.tw_handicap.map((e) => `<tr><td>${e.label}</td><td>${e.twOdds.toFixed(2)}</td><td>${pct(e.trueProb)}</td><td class="${e.ev > 0 ? "ev-pos" : "ev-neg"}">${e.ev > 0 ? "+" : ""}${(e.ev * 100).toFixed(1)}%</td></tr>`).join("")}</table>
+        <p class="muted" style="font-size:.8rem;margin-top:6px">讓分 EV 以 Poisson 進球模型機率估算（非市場去水），僅供參考。運彩僅在大比分場次開讓分盤。</p>
+      </div>` : ""}
       ${renderIntlOdds(oddsRes.sources)}
       <div id="odds-chart-slot"></div>
 

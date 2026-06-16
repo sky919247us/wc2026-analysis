@@ -50,6 +50,34 @@ export function poisson(xgHome: number, xgAway: number, maxGoals = 8): PoissonRe
 }
 
 /**
+ * 進球差（home − away）分佈 → 歐洲讓分 cover 機率。
+ * 回傳 { homeCover, push, awayCover }，favorite 由 xG 高者自動判定，讓 line 球。
+ */
+export function handicapProbs(xgHome: number, xgAway: number, line: number, maxGoals = 10): { homeCover: number; push: number; awayCover: number } {
+  const pmfH = (k: number) => pmf(k, xgHome);
+  const pmfA = (k: number) => pmf(k, xgAway);
+  // margin = home - away 的機率分佈
+  const margin: Record<number, number> = {};
+  for (let h = 0; h <= maxGoals; h++)
+    for (let a = 0; a <= maxGoals; a++) {
+      const d = h - a;
+      margin[d] = (margin[d] ?? 0) + pmfH(h) * pmfA(a);
+    }
+  const homeFav = xgHome >= xgAway;
+  // 讓球方需贏超過 line；受讓方 +line
+  let homeCover = 0, push = 0, awayCover = 0;
+  for (const [dStr, p] of Object.entries(margin)) {
+    const d = Number(dStr);
+    if (homeFav) {
+      if (d > line) homeCover += p; else if (d === line) push += p; else awayCover += p;
+    } else {
+      if (-d > line) awayCover += p; else if (-d === line) push += p; else homeCover += p;
+    }
+  }
+  return { homeCover: +homeCover.toFixed(4), push: +push.toFixed(4), awayCover: +awayCover.toFixed(4) };
+}
+
+/**
  * 由 Elo 差推估 xG：實力越強期望進球越高，含主場加成。
  * 基準聯賽平均每隊每場 ~1.35 球。
  */
