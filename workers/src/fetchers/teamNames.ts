@@ -15,6 +15,7 @@ export const NAME_TO_TLA: Record<string, string> = {
   Ukraine: "UKR", Hungary: "HUN", Slovakia: "SVK", Slovenia: "SVN", Romania: "ROU",
   Greece: "GRE", Albania: "ALB", Georgia: "GEO", Uzbekistan: "UZB", Jordan: "JOR",
   Iraq: "IRQ", "United Arab Emirates": "UAE", Curacao: "CUR", "Curaçao": "CUR", Haiti: "HAI",
-  "Cape Verde": "CPV", "Bosnia and Herzegovina": "BIH", "Bosnia-Herzegovina": "BIH",
-  "DR Congo": "COD", "Congo DR": "COD", Italy: "ITA",
+  "Cape Verde": "CPV", "Cape Verde Islands": "CPV",
+  "Bosnia and Herzegovina": "BIH", "Bosnia-Herzegovina": "BIH", "Bosnia & Herzegovina": "BIH",
+  "DR Congo": "COD", "Congo DR": "COD", "DR Congo (Congo DR)": "COD", Italy: "ITA",
 };

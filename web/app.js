@@ -265,6 +265,8 @@ async function openDetail(matchId) {
         </div>
       </div>
 
+      ${renderIntlOdds(oddsRes.sources)}
+
       <div class="dt-section">
         <h4>💰 台灣運彩期望值 (EV)</h4>
         ${evRows
@@ -285,6 +287,30 @@ async function openDetail(matchId) {
   } catch (e) {
     body.innerHTML = '<p class="muted">⚠️ 載入失敗</p>';
   }
+}
+
+// 國際盤賠率顯示（Pinnacle / Bet365 的 1X2，含與前次比較的箭頭）
+function renderIntlOdds(sources) {
+  if (!sources) return "";
+  const srcZh = { pinnacle: "Pinnacle（鋭盤）", bet365: "Bet365" };
+  const rows = Object.entries(sources)
+    .filter(([s]) => srcZh[s])
+    .map(([s, m]) => {
+      const x = m["1x2"]; if (!x) return "";
+      const cell = (o) => {
+        if (!o) return "<td>-</td>";
+        const arrow = o.change > 0 ? `<span style="color:var(--win)">▲${o.change}%</span>`
+          : o.change < 0 ? `<span style="color:var(--lose)">▼${Math.abs(o.change)}%</span>` : "";
+        return `<td>${o.odds.toFixed(2)} ${arrow}</td>`;
+      };
+      return `<tr><td class="name">${srcZh[s]}</td>${cell(x.home)}${cell(x.draw)}${cell(x.away)}</tr>`;
+    }).join("");
+  if (!rows) return "";
+  return `<div class="dt-section">
+    <h4>🌍 國際盤賠率（即時，輔助參考）</h4>
+    <table class="ev-table"><tr><th>盤口</th><th>主勝</th><th>和局</th><th>客勝</th></tr>${rows}</table>
+    <p class="muted" style="font-size:.8rem;margin-top:6px">箭頭為與前次快照比較的賠率變動。Pinnacle 為公認最準的市場真實機率基準。</p>
+  </div>`;
 }
 
 // 極簡 Markdown → HTML（標題/粗體/清單/段落），報告由 LLM 產出 markdown
