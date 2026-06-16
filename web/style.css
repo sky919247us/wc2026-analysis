@@ -74,6 +74,10 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
   background: var(--panel); color: var(--text);
   border: 1px solid #ffffff20; border-radius: 12px; font-size: 1rem;
 }
+/* ---- 每日總覽 ---- */
+.daily-card { margin-bottom: 22px; border-left: 3px solid var(--accent); }
+.daily-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; }
+
 /* ---- 首頁推薦 ---- */
 .hero-head { margin-bottom: 20px; }
 .hero-head h2 { font-size: 1.6rem; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }

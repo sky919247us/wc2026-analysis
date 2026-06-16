@@ -129,6 +129,20 @@ const selZhFull = (p) => {
   return { label: "和局", p: m };
 };
 
+async function loadDailySummary() {
+  const el = document.getElementById("daily-summary");
+  if (!el) return;
+  try {
+    const d = await api("/api/daily-summary");
+    if (d.summary?.content && d.summary.content.length > 20) {
+      el.innerHTML = `<div class="card daily-card">
+        <div class="daily-title">📰 今日總覽 <span class="muted">${d.summary.date}</span></div>
+        <div class="report-md">${mdToHtml(d.summary.content)}</div>
+      </div>`;
+    }
+  } catch {}
+}
+
 async function loadHome() {
   const el = document.getElementById("home-picks");
   try {
@@ -582,6 +596,7 @@ api("/api/health").then((h) => {
       `資料更新：${new Date(h.lastSync).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`;
 }).catch(() => {});
 
+loadDailySummary();
 loadHome();
 loadMatches();
 loadStandings();

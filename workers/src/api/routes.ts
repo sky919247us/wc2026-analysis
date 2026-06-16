@@ -18,6 +18,7 @@ import { buildParlays } from "../models/parlays";
 import { syncOutright } from "../fetchers/outright";
 import { generateReports } from "../llm/generate";
 import { fetchNews } from "../fetchers/news";
+import { generateDailySummary } from "../llm/daily";
 import { handleWebhook, broadcast } from "../notify/telegram";
 
 const JSON_HEADERS = {
@@ -141,6 +142,12 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
        LIMIT ?1`,
     ).bind(limit).all();
     return json({ picks: results });
+  }
+
+  // 每日總覽
+  if (path === "/api/daily-summary") {
+    const raw = await env.CACHE.get("daily:summary");
+    return json({ summary: raw ? JSON.parse(raw) : null });
   }
 
   // AI 白話報告（單場）
@@ -311,6 +318,9 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/admin/outright") {
       return json({ ok: true, ...(await syncOutright(env)) });
+    }
+    if (path === "/api/admin/daily-summary") {
+      return json(await generateDailySummary(env));
     }
     if (path === "/api/admin/daily-push") {
       const { valueLegs, parlays } = await buildParlays(env);

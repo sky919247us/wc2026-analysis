@@ -15,6 +15,7 @@ import { fetchNews } from "./fetchers/news";
 import { syncOutright } from "./fetchers/outright";
 import { buildParlays } from "./models/parlays";
 import { broadcast } from "./notify/telegram";
+import { generateDailySummary } from "./llm/daily";
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -69,6 +70,10 @@ export default {
     // 每日 UTC 03:00：冠軍盤參考賠率（1 credit）
     if (minute === 0 && hour === 3 && env.ODDS_API_KEY)
       ctx.waitUntil(syncOutright(env).then(() => {}).catch((e) => console.error("outright", e)));
+
+    // 每日 UTC 07:30（台灣 15:30）：生成每日總覽（需 LLM key）
+    if (minute === 30 && hour === 7 && (env.GEMINI_API_KEY || env.OPENAI_API_KEY || env.ANTHROPIC_API_KEY))
+      ctx.waitUntil(generateDailySummary(env).then(() => {}).catch((e) => console.error("dailySummary", e)));
 
     // 每日 UTC 08:00（台灣 16:00）：推播今日 +EV 精選 + 最佳串關
     if (minute === 0 && hour === 8 && env.TELEGRAM_BOT_TOKEN)
