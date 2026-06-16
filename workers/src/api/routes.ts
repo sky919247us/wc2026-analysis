@@ -14,6 +14,7 @@ import { evForMarket } from "../models/ev";
 import { runPredictions } from "../models/predict";
 import { settleMatches } from "../models/settle";
 import { generateReports } from "../llm/generate";
+import { handleWebhook } from "../notify/telegram";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -28,6 +29,14 @@ function json(data: unknown, status = 200): Response {
 export async function handleApi(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
+
+  // Telegram webhook（BotFather 設定的 URL）。用 path 內含 secret 驗證來源。
+  if (path.startsWith("/api/tg/") && req.method === "POST") {
+    if (env.TELEGRAM_WEBHOOK_SECRET && path !== `/api/tg/${env.TELEGRAM_WEBHOOK_SECRET}`)
+      return json({ error: "forbidden" }, 403);
+    try { await handleWebhook(env, await req.json()); } catch { /* ignore bad update */ }
+    return json({ ok: true });
+  }
 
   if (path === "/api/health") {
     const lastSync = await env.CACHE.get("matches:lastSync");
@@ -84,6 +93,30 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     const matchId = url.searchParams.get("match_id");
     if (!matchId) return json({ error: "match_id required" }, 400);
     return json(await buildOddsView(env, matchId));
+  }
+
+  // 最新 AI 推薦：信心最高的未開賽比賽（首頁精選）
+  if (path === "/api/top-picks") {
+    const limit = Math.min(Number(url.searchParams.get("limit")) || 6, 20);
+    const { results } = await env.DB.prepare(
+      `SELECT p.match_id, p.prob_home, p.prob_draw, p.prob_away, p.confidence, p.upset_index, p.risk_grade,
+              p.xg_home, p.xg_away,
+              h.id AS home_id, a.id AS away_id, h.name_zh AS home_zh, a.name_zh AS away_zh,
+              m.kickoff_utc, m.stage,
+              CASE WHEN r.match_id IS NULL THEN 0 ELSE 1 END AS has_report
+       FROM predictions p
+       JOIN (SELECT match_id, MAX(created_at) AS mx FROM predictions GROUP BY match_id) last
+         ON last.match_id = p.match_id AND last.mx = p.created_at
+       JOIN matches m ON m.id = p.match_id
+       JOIN teams h ON h.id = m.home_id
+       JOIN teams a ON a.id = m.away_id
+       LEFT JOIN reports r ON r.match_id = p.match_id
+       WHERE m.status = 'SCHEDULED'
+         AND m.kickoff_utc >= datetime('now', '-2 hours')
+       ORDER BY p.confidence DESC, m.kickoff_utc
+       LIMIT ?1`,
+    ).bind(limit).all();
+    return json({ picks: results });
   }
 
   // AI 白話報告（單場）

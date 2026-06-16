@@ -7,5 +7,6 @@ export interface Env extends LLMEnv {
   ODDS_API_KEY?: string;
   ODDSPAPI_KEY?: string;
   TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_WEBHOOK_SECRET?: string;
   ADMIN_KEY?: string; // /api/admin/* 手動觸發用
 }

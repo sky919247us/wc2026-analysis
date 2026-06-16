@@ -3,6 +3,7 @@
  * 觸發規則寫入 odds_alerts。
  */
 import type { Env } from "../env";
+import { broadcast, formatAlert } from "../notify/telegram";
 
 interface SnapshotRow {
   match_id: string;
@@ -66,5 +67,15 @@ async function pushAlert(env: Env, matchId: string, rule: string, detail: string
   await env.DB.prepare(
     `INSERT INTO odds_alerts (match_id, rule, detail, severity) VALUES (?1, ?2, ?3, ?4)`,
   ).bind(matchId, rule, detail, severity).run();
-  // Telegram 推播掛在這裡（Phase 4，TELEGRAM_BOT_TOKEN 設定後啟用）
+
+  // Telegram 推播（設了 TELEGRAM_BOT_TOKEN 且有訂閱者才送），只推較顯著的（≥35）
+  if (env.TELEGRAM_BOT_TOKEN && severity >= 35) {
+    const teams = await env.DB.prepare(
+      `SELECT h.name_zh AS home_zh, a.name_zh AS away_zh FROM matches m
+       JOIN teams h ON h.id = m.home_id JOIN teams a ON a.id = m.away_id WHERE m.id = ?1`,
+    ).bind(matchId).first<{ home_zh: string; away_zh: string }>();
+    if (teams) {
+      try { await broadcast(env, formatAlert({ ...teams, detail, severity })); } catch { /* 推播失敗不影響偵測 */ }
+    }
+  }
 }

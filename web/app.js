@@ -104,8 +104,60 @@ async function loadStandings() {
   }
 }
 
-/* ---------- AI 分析列表 ---------- */
+/* ---------- 首頁：最新 AI 推薦 ---------- */
 const pct = (x) => `${(x * 100).toFixed(0)}%`;
+const selZhFull = (p) => {
+  const m = Math.max(p.prob_home, p.prob_draw, p.prob_away);
+  if (m === p.prob_home) return { label: `${p.home_zh} 勝`, p: m };
+  if (m === p.prob_away) return { label: `${p.away_zh} 勝`, p: m };
+  return { label: "和局", p: m };
+};
+
+async function loadHome() {
+  const el = document.getElementById("home-picks");
+  try {
+    const data = await api("/api/top-picks?limit=6");
+    const picks = data.picks || [];
+    if (!picks.length) { el.innerHTML = '<p class="muted">尚無推薦（預測產生後顯示）</p>'; return; }
+    el.innerHTML = picks.map((p, i) => {
+      const sel = selZhFull(p);
+      const t = new Date(p.kickoff_utc).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", weekday: "short" });
+      return `<div class="pick-card" data-mid="${p.match_id}">
+        <div class="pick-rank">#${i + 1} 信心 ${p.confidence}</div>
+        <div class="pick-teams">${flag(p.home_id)} ${p.home_zh} <span class="muted">vs</span> ${p.away_zh} ${flag(p.away_id)}</div>
+        <div class="pick-time">${t}・${p.stage?.startsWith("GROUP_") ? p.stage.replace("GROUP_", "") + " 組" : p.stage}</div>
+        <div class="pick-conf">
+          <div class="ring" style="--p:${p.confidence}"><span class="num">${p.confidence}</span></div>
+          <div class="meta">
+            <div>AI 看好：<span class="pick-sel">${sel.label}</span>（${pct(sel.p)}）</div>
+            <div class="muted">風險 ${p.risk_grade} 級・爆冷 ${p.upset_index}・xG ${p.xg_home}-${p.xg_away}</div>
+          </div>
+        </div>
+        <div class="pick-report muted" data-report="${p.match_id}">
+          ${p.has_report ? "載入 AI 白話分析…" : "完整分析請點開"}
+        </div>
+      </div>`;
+    }).join("");
+    el.querySelectorAll(".pick-card").forEach((c) =>
+      c.addEventListener("click", () => openDetail(c.dataset.mid)));
+    // 補抓有報告者的摘要
+    picks.filter((p) => p.has_report).forEach(async (p) => {
+      try {
+        const r = await api(`/api/report?match_id=${p.match_id}`);
+        const slot = el.querySelector(`[data-report="${p.match_id}"]`);
+        if (slot && r.report?.content_md) {
+          // 取報告純文字前 80 字當摘要
+          const plain = r.report.content_md.replace(/[#*`>_]/g, "").replace(/\n+/g, " ").trim();
+          slot.textContent = plain.slice(0, 80) + "…";
+        }
+      } catch {}
+    });
+  } catch {
+    el.innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';
+  }
+}
+
+/* ---------- AI 分析列表 ---------- */
 
 async function loadAnalysis() {
   const el = document.getElementById("analysis-list");
@@ -347,6 +399,7 @@ api("/api/health").then((h) => {
       `資料更新：${new Date(h.lastSync).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })}`;
 }).catch(() => {});
 
+loadHome();
 loadMatches();
 loadStandings();
 loadTeams();

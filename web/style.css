@@ -68,6 +68,25 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
   background: var(--panel); color: var(--text);
   border: 1px solid #ffffff20; border-radius: 12px; font-size: 1rem;
 }
+/* ---- 首頁推薦 ---- */
+.hero-head { margin-bottom: 20px; }
+.hero-head h2 { font-size: 1.6rem; background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero-head p { margin-top: 6px; }
+.picks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.pick-card { background: var(--panel); border: 1px solid #ffffff12; border-radius: 16px; padding: 18px; cursor: pointer; transition: border-color .15s, transform .15s; position: relative; overflow: hidden; }
+.pick-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+.pick-rank { position: absolute; top: 0; right: 0; background: var(--accent); color: #fff; font-size: .75rem; font-weight: 700; padding: 3px 12px; border-bottom-left-radius: 10px; }
+.pick-teams { font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+.pick-time { font-size: .8rem; color: var(--muted); margin-bottom: 14px; }
+.pick-conf { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.pick-conf .ring { width: 64px; height: 64px; }
+.pick-conf .ring .num { font-size: 1.1rem; }
+.pick-conf .meta { font-size: .85rem; }
+.pick-conf .meta .pick-sel { font-size: 1.05rem; font-weight: 700; color: var(--accent2); }
+.pick-report { font-size: .85rem; color: var(--muted); border-top: 1px solid #ffffff10; padding-top: 10px; line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.pick-badge-report { display: inline-block; font-size: .72rem; color: var(--win); margin-left: 6px; }
+
 /* ---- AI 分析卡 ---- */
 .analysis-card { cursor: pointer; transition: border-color .15s, transform .15s; }
 .analysis-card:hover { border-color: var(--accent); transform: translateY(-2px); }
