@@ -38,10 +38,14 @@ export async function syncOddsPapi(env: Env, hoursAhead = 36, maxFixtures = 12):
   const fxRes = await fetch(`${BASE}/fixtures?sportId=10&from=${from}&to=${to}&apiKey=${env.ODDSPAPI_KEY}`, {
     signal: AbortSignal.timeout(30_000),
   });
-  if (!fxRes.ok) throw new Error(`oddspapi fixtures ${fxRes.status}: ${await fxRes.text()}`);
+  // 免費方案從機房 IP 取 fixtures 會 403、/odds 需付費 → 不中斷，回報後略過
+  if (!fxRes.ok) return { inserted: 0, fixtures: 0, skipped: [`fixtures HTTP ${fxRes.status} (OddsPapi 免費方案不支援伺服器存取)`] };
   const fxData = (await fxRes.json()) as any;
-  const fixtures = (fxData.fixtures ?? fxData.data ?? fxData ?? []).filter(
-    (f: any) => /world cup/i.test(f.tournamentName ?? f.tournament ?? ""),
+  const all = Array.isArray(fxData) ? fxData : (fxData.fixtures ?? fxData.data ?? []);
+  // 僅真正世界盃，排除 SRL/Srl 模擬賽
+  const fixtures = all.filter(
+    (f: any) => (f.tournamentName ?? "") === "World Cup"
+      && !/\bSRL\b/i.test(`${f.participant1Name} ${f.participant2Name}`),
   );
 
   const now = new Date().toISOString();
@@ -52,18 +56,19 @@ export async function syncOddsPapi(env: Env, hoursAhead = 36, maxFixtures = 12):
   for (const m of upcoming) {
     // 配對 fixture：兩隊 TLA 相符 + 開賽時間誤差 < 3h
     const fx = fixtures.find((f: any) => {
-      const h = NAME_TO_TLA[f.homeTeam ?? f.home ?? ""];
-      const a = NAME_TO_TLA[f.awayTeam ?? f.away ?? ""];
-      const t = new Date(f.startTime ?? f.commenceTime ?? f.date ?? 0).getTime();
-      return h === m.home_id && a === m.away_id && Math.abs(t - new Date(m.kickoff_utc).getTime()) < 3 * 3600_000;
+      const h = NAME_TO_TLA[f.participant1Name ?? ""];
+      const a = NAME_TO_TLA[f.participant2Name ?? ""];
+      const t = new Date(f.trueStartTime ?? f.startTime ?? 0).getTime();
+      return h === m.home_id && a === m.away_id && Math.abs(t - new Date(m.kickoff_utc).getTime()) < 4 * 3600_000;
     });
     if (!fx) { skipped.push(`${m.home_id} vs ${m.away_id}`); continue; }
 
-    const fixtureId = fx.fixtureId ?? fx.id;
+    const fixtureId = fx.fixtureId;
     const oddsRes = await fetch(`${BASE}/odds?fixtureId=${fixtureId}&bookmakers=pinnacle,bet365&apiKey=${env.ODDSPAPI_KEY}`, {
       signal: AbortSignal.timeout(30_000),
     });
-    if (!oddsRes.ok) { skipped.push(`odds ${fixtureId} ${oddsRes.status}`); continue; }
+    // 免費方案 /odds 回 403 → 略過不中斷（升級付費方案後即生效）
+    if (!oddsRes.ok) { skipped.push(`odds ${fixtureId} HTTP ${oddsRes.status}`); continue; }
     const od = (await oddsRes.json()) as any;
     const bookOdds = od.bookmakerOdds ?? od.data?.bookmakerOdds ?? {};
 
