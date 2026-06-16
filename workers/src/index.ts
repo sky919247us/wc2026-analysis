@@ -64,7 +64,7 @@ export default {
 
 async function runReportGen(env: Env): Promise<void> {
   try {
-    const r = await generateReports(env, { limit: 8 }); // 每次最多 8 場，分批鋪滿
+    const r = await generateReports(env, { limit: 4 }); // gemini-3.5-flash 免費層 5 RPM → 每次 4 場，cron 每小時補滿
     console.log(`report gen: ${r.generated} generated, ${r.skipped} skipped, errors: ${r.errors.join("; ") || "none"}`);
   } catch (e) {
     console.error("report gen failed", e);

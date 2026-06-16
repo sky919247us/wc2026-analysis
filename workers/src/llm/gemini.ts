@@ -23,6 +23,8 @@ export class GeminiProvider implements LLMProvider {
         generationConfig: {
           maxOutputTokens: req.maxTokens ?? 1500,
           temperature: req.temperature ?? 0.7,
+          // Gemini 2.5/3.x 為思考模型，預設會吃光 token 預算 → 關閉思考，直接產出報告
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
       signal: AbortSignal.timeout(60_000),

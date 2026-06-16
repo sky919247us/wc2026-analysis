@@ -14,7 +14,7 @@ interface PredRow {
 }
 
 export async function generateReports(env: Env, opts: { matchId?: string; force?: boolean; limit?: number } = {}): Promise<{ generated: number; skipped: number; errors: string[] }> {
-  const limit = opts.limit ?? 10;
+  const limit = opts.limit ?? 4; // gemini-3.5-flash 免費層 5 RPM，預設保守批量
   const errors: string[] = [];
   let generated = 0, skipped = 0;
 

@@ -26,5 +26,5 @@ crons = ["*/5 * * * *"]
 #   TELEGRAM_BOT_TOKEN    — 推播
 [vars]
 # 優先序：Gemini（免費無限）→ GPT → Claude，前者失敗自動 fallback
-LLM_PROVIDERS = "gemini:gemini-2.0-flash,openai:gpt-4o-mini,anthropic:claude-haiku-4-5"
+LLM_PROVIDERS = "gemini:gemini-3.5-flash,openai:gpt-4o-mini,anthropic:claude-haiku-4-5"
 # OPENAI_BASE_URL 可改成任何 OpenAI 相容端點
