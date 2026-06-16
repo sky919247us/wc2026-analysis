@@ -89,7 +89,25 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     const { results } = await env.DB.prepare(
       `SELECT id, name_zh, name_en, fifa_rank, grp, elo FROM teams ORDER BY grp, id`,
     ).all();
-    return json({ teams: results });
+    const form = await teamForm(env);
+    return json({ teams: (results ?? []).map((t: any) => ({ ...t, form: form[t.id] ?? "" })) });
+  }
+
+  // 賠率走勢：某場 1x2 各來源隨時間的賠率序列（給走勢圖）
+  if (path === "/api/odds-history") {
+    const matchId = url.searchParams.get("match_id");
+    if (!matchId) return json({ error: "match_id required" }, 400);
+    const { results } = await env.DB.prepare(
+      `SELECT source, selection, odds, captured_at FROM odds_snapshots
+       WHERE match_id = ?1 AND market = '1x2'
+       ORDER BY captured_at ASC LIMIT 1000`,
+    ).bind(matchId).all<{ source: string; selection: string; odds: number; captured_at: string }>();
+    // 整理成 { source: { selection: [{t,odds}] } }
+    const series: Record<string, Record<string, { t: string; odds: number }[]>> = {};
+    for (const r of results ?? []) {
+      ((series[r.source] ??= {})[r.selection] ??= []).push({ t: r.captured_at, odds: r.odds });
+    }
+    return json({ match_id: matchId, series });
   }
 
   // 賠率：每場每來源每市場的最新快照 + 前次比較 + 台灣運彩 EV
@@ -165,9 +183,12 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
   // 公開戰績：總命中率、ROI、分風險評級統計、近期逐場明細
   if (path === "/api/track") {
     const summary = await env.DB.prepare(
-      `SELECT COUNT(*) AS total, SUM(hit) AS hits, ROUND(SUM(profit_units), 2) AS profit
+      `SELECT COUNT(*) AS total, SUM(hit) AS hits, ROUND(SUM(profit_units), 2) AS profit,
+              ROUND(AVG(clv), 2) AS avg_clv,
+              SUM(CASE WHEN clv > 0 THEN 1 ELSE 0 END) AS clv_pos,
+              SUM(CASE WHEN clv IS NOT NULL THEN 1 ELSE 0 END) AS clv_n
        FROM track_record`,
-    ).first<{ total: number; hits: number; profit: number }>();
+    ).first<{ total: number; hits: number; profit: number; avg_clv: number; clv_pos: number; clv_n: number }>();
 
     const byGrade = await env.DB.prepare(
       `SELECT p.risk_grade AS grade, COUNT(*) AS total, SUM(tr.hit) AS hits
@@ -195,6 +216,8 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
       hitRate: total ? +((hits / total) * 100).toFixed(1) : 0,
       profitUnits: profit,
       roi: total ? +((profit / total) * 100).toFixed(1) : 0, // 每注平均報酬率%
+      avgClv: summary?.avg_clv ?? null,
+      clvPositiveRate: summary?.clv_n ? +(((summary.clv_pos ?? 0) / summary.clv_n) * 100).toFixed(0) : null,
       byGrade: byGrade.results,
       recent: recent.results,
     });
@@ -268,6 +291,25 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
   }
 
   return json({ error: "not found" }, 404);
+}
+
+/** 各隊近 5 場 W/D/L（由完賽比賽計算，最新在左） */
+async function teamForm(env: Env): Promise<Record<string, string>> {
+  const { results } = await env.DB.prepare(
+    `SELECT home_id, away_id, home_score, away_score, kickoff_utc
+     FROM matches WHERE status = 'FINISHED' AND home_score IS NOT NULL
+     ORDER BY kickoff_utc ASC`,
+  ).all<{ home_id: string; away_id: string; home_score: number; away_score: number }>();
+  const form: Record<string, string[]> = {};
+  for (const m of results ?? []) {
+    const hr = m.home_score > m.away_score ? "W" : m.home_score < m.away_score ? "L" : "D";
+    const ar = hr === "W" ? "L" : hr === "L" ? "W" : "D";
+    (form[m.home_id] ??= []).push(hr);
+    (form[m.away_id] ??= []).push(ar);
+  }
+  const out: Record<string, string> = {};
+  for (const [id, arr] of Object.entries(form)) out[id] = arr.slice(-5).reverse().join("");
+  return out;
 }
 
 /** 組合一場比賽的賠率視圖：各來源最新 1x2/大小球 + 變動 + 運彩 EV */

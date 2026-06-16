@@ -47,10 +47,14 @@ export async function settleMatches(env: Env): Promise<{ settled: number; eloUpd
       const hit = rec === actual ? 1 : 0;
       const profit = hit ? +(odds - 1).toFixed(2) : -1;
 
+      // CLV：早盤 vs 收盤（開賽前最早一筆 vs 最後一筆快照），取最佳來源
+      const { entry, closing } = await entryClosingOdds(env, m.id, rec, m.kickoff_utc);
+      const clv = entry && closing ? +((entry / closing - 1) * 100).toFixed(2) : null;
+
       await env.DB.prepare(
-        `INSERT INTO track_record (match_id, recommended_market, recommended_odds, ev_at_recommend, hit, profit_units, settled_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))`,
-      ).bind(m.id, rec, odds, null, hit, profit).run();
+        `INSERT INTO track_record (match_id, recommended_market, recommended_odds, ev_at_recommend, hit, profit_units, closing_odds, clv, settled_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))`,
+      ).bind(m.id, rec, odds, null, hit, profit, closing ?? null, clv).run();
       settled++;
     }
 
@@ -72,6 +76,19 @@ export async function settleMatches(env: Env): Promise<{ settled: number; eloUpd
 
   await env.CACHE.put("settle:lastRun", new Date().toISOString());
   return { settled, eloUpdated };
+}
+
+/** 該選項的早盤（最早）與收盤（開賽前最後）賠率，來源優先 tw > pinnacle */
+async function entryClosingOdds(env: Env, matchId: string, sel: string, kickoff: string): Promise<{ entry: number | null; closing: number | null }> {
+  for (const source of ["tw", "pinnacle"]) {
+    const { results } = await env.DB.prepare(
+      `SELECT odds, captured_at FROM odds_snapshots
+       WHERE match_id = ?1 AND source = ?2 AND market = '1x2' AND selection = ?3 AND captured_at <= ?4
+       ORDER BY captured_at ASC`,
+    ).bind(matchId, source, sel, kickoff).all<{ odds: number; captured_at: string }>();
+    if (results && results.length) return { entry: results[0].odds, closing: results[results.length - 1].odds };
+  }
+  return { entry: null, closing: null };
 }
 
 /** 推薦方向的下注賠率：運彩 > Pinnacle > 融合機率倒數 */

@@ -267,6 +267,7 @@ async function openDetail(matchId) {
       </div>
 
       ${renderIntlOdds(oddsRes.sources)}
+      <div id="odds-chart-slot"></div>
 
       <div class="dt-section">
         <h4>💰 台灣運彩期望值 (EV)</h4>
@@ -283,8 +284,9 @@ async function openDetail(matchId) {
 
       <div class="disclaimer">⚠️ 以上分析由 AI 多模型自動生成，僅供娛樂參考，不構成投注建議。未滿 18 歲不得購買運動彩券，請理性投注。</div>`;
 
-    // 非同步載入 AI 白話報告（生成需時，獨立抓取不阻塞詳情顯示）
+    // 非同步載入 AI 白話報告 + 賠率走勢圖
     loadReport(matchId);
+    loadOddsChart(matchId);
   } catch (e) {
     body.innerHTML = '<p class="muted">⚠️ 載入失敗</p>';
   }
@@ -312,6 +314,39 @@ function renderIntlOdds(sources) {
     <table class="ev-table"><tr><th>盤口</th><th>主勝</th><th>和局</th><th>客勝</th></tr>${rows}</table>
     <p class="muted" style="font-size:.8rem;margin-top:6px">箭頭為與前次快照比較的賠率變動。Pinnacle 為公認最準的市場真實機率基準。</p>
   </div>`;
+}
+
+// 賠率走勢圖：tw + pinnacle 的主勝賠率隨時間（SVG 折線）
+async function loadOddsChart(matchId) {
+  const slot = document.getElementById("odds-chart-slot");
+  if (!slot) return;
+  try {
+    const d = await api(`/api/odds-history?match_id=${matchId}`);
+    const lines = [];
+    const colors = { tw: "var(--gold)", pinnacle: "var(--accent2)" };
+    const names = { tw: "台灣運彩", pinnacle: "Pinnacle" };
+    let allOdds = [], allT = [];
+    for (const src of ["tw", "pinnacle"]) {
+      const pts = d.series?.[src]?.home;
+      if (pts && pts.length >= 2) {
+        lines.push({ src, pts });
+        pts.forEach((p) => { allOdds.push(p.odds); allT.push(new Date(p.t).getTime()); });
+      }
+    }
+    if (lines.length === 0) { slot.innerHTML = ""; return; }
+    const minO = Math.min(...allOdds), maxO = Math.max(...allOdds), minT = Math.min(...allT), maxT = Math.max(...allT);
+    const W = 320, H = 90, pad = 6;
+    const x = (t) => pad + (maxT === minT ? 0 : ((new Date(t).getTime() - minT) / (maxT - minT)) * (W - 2 * pad));
+    const y = (o) => pad + (maxO === minO ? (H - 2 * pad) / 2 : (1 - (o - minO) / (maxO - minO)) * (H - 2 * pad));
+    const paths = lines.map((l) => {
+      const dpath = l.pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)} ${y(p.odds).toFixed(1)}`).join(" ");
+      return `<path d="${dpath}" fill="none" stroke="${colors[l.src]}" stroke-width="2"/>`;
+    }).join("");
+    const legend = lines.map((l) => `<span style="color:${colors[l.src]}">● ${names[l.src]}</span>`).join("　");
+    slot.innerHTML = `<div class="dt-section"><h4>📉 主勝賠率走勢</h4>
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:var(--panel);border-radius:10px">${paths}</svg>
+      <div style="font-size:.8rem;margin-top:4px">${legend}　<span class="muted">高→低＝資金看好主隊</span></div></div>`;
+  } catch { slot.innerHTML = ""; }
 }
 
 // 極簡 Markdown → HTML（標題/粗體/清單/段落），報告由 LLM 產出 markdown
@@ -442,7 +477,9 @@ async function loadTrack() {
         <div class="track-stat"><div class="big">${t.hitRate}%</div><div class="lbl">命中率（${t.hits}/${t.total}）</div></div>
         <div class="track-stat"><div class="big ${t.profitUnits >= 0 ? "pos" : "neg"}">${t.profitUnits >= 0 ? "+" : ""}${t.profitUnits}</div><div class="lbl">平準注累積損益</div></div>
         <div class="track-stat"><div class="big ${roiCls}">${t.roi >= 0 ? "+" : ""}${t.roi}%</div><div class="lbl">平均每注報酬 (ROI)</div></div>
+        ${t.avgClv != null ? `<div class="track-stat"><div class="big ${t.avgClv >= 0 ? "pos" : "neg"}">${t.avgClv >= 0 ? "+" : ""}${t.avgClv}%</div><div class="lbl">平均 CLV（贏過收盤線 ${t.clvPositiveRate ?? 0}%）</div></div>` : ""}
       </div>
+      ${t.avgClv != null ? '<p class="muted" style="font-size:.8rem;margin:-10px 0 18px">CLV（收盤線價值）：推薦時機的賠率相對開賽前收盤賠率。長期為正＝系統性領先市場，是真實 edge 的指標。</p>' : ""}
       ${grades ? `<div class="grade-stats">${grades}</div>` : ""}
       <div class="card">
         <table class="rec-table">
@@ -461,11 +498,13 @@ async function loadTrack() {
 /* ---------- 球隊 ---------- */
 let allTeams = [];
 function renderTeams(teams) {
+  const formHtml = (f) => f ? `<div class="form-row">${[...f].map((r) => `<span class="form-dot f-${r}">${r}</span>`).join("")}</div>` : "";
   document.getElementById("team-grid").innerHTML = teams.map((t) => `<div class="card team-card">
     <div class="tla">${flag(t.id)} ${t.id}</div>
     <div class="zh">${t.name_zh}</div>
     <div class="muted">${t.name_en}</div>
     <span class="badge">${t.grp ? `${t.grp} 組` : "分組未定"}</span>
+    ${formHtml(t.form)}
   </div>`).join("") || '<p class="muted">沒有符合的球隊</p>';
 }
 async function loadTeams() {
