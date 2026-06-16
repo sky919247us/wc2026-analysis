@@ -83,32 +83,32 @@ async function runOddsPapiSync(env: Env): Promise<void> {
 }
 
 /**
- * 自適應抓取（5 把 key = 2500 點/月）：分層頻率，貼近原始需求
- *   臨場（開球前 3h 內 或 進行中）→ 每 ~10 分鐘
- *   比賽日其他時段（開球在 +12h 內）→ 每 ~60 分鐘
- *   無比賽                          → 不抓（額度留給臨場高頻）
- * 安全閥：額度由 5 把 key 輪替＋耗盡自動跳下一把，全部用完才停。
+ * 自適應抓取（5 把 key = 2500 點/月）：分層頻率
+ *   進行中（已開球 2.5h 內）→ 6 月每 ~10 分、7 月起每 ~5 分（混合方案）
+ *   比賽日賽前（開球前 12h 內）→ 每 ~60 分
+ *   無比賽 → 每 ~12 小時
+ * 安全閥：5 把 key 輪替＋額度耗盡自動跳下一把，全部用完才停。
  */
 async function maybeSyncOdds(env: Env): Promise<void> {
-  const hot = await env.DB.prepare(
+  const inPlay = await env.DB.prepare(
     `SELECT COUNT(*) AS n FROM matches
      WHERE status != 'FINISHED'
-       AND kickoff_utc <= datetime('now', '+3 hours')
+       AND kickoff_utc <= datetime('now')
        AND kickoff_utc >= datetime('now', '-2.5 hours')`,
   ).first<{ n: number }>();
 
   let thresholdMin: number;
-  if (hot && hot.n > 0) {
-    thresholdMin = 9; // 臨場每 ~10 分鐘
+  if (inPlay && inPlay.n > 0) {
+    // 進行中：6 月（含以前）每 10 分；7 月起每 5 分
+    thresholdMin = new Date().getUTCMonth() <= 5 ? 9 : 4;
   } else {
-    const matchDay = await env.DB.prepare(
+    const pre = await env.DB.prepare(
       `SELECT COUNT(*) AS n FROM matches
        WHERE status != 'FINISHED'
-         AND kickoff_utc <= datetime('now', '+12 hours')
-         AND kickoff_utc >= datetime('now', '-2.5 hours')`,
+         AND kickoff_utc > datetime('now')
+         AND kickoff_utc <= datetime('now', '+12 hours')`,
     ).first<{ n: number }>();
-    if (!matchDay || matchDay.n === 0) return; // 無比賽 → 不抓
-    thresholdMin = 58; // 比賽日每 ~60 分鐘
+    thresholdMin = pre && pre.n > 0 ? 58 : 718; // 賽前每 60 分；無比賽每 12h
   }
 
   const last = await env.CACHE.get("odds:lastSync");
