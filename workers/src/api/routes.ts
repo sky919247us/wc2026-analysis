@@ -13,6 +13,7 @@ import { handleIngest } from "./ingest";
 import { evForMarket } from "../models/ev";
 import { runPredictions } from "../models/predict";
 import { settleMatches } from "../models/settle";
+import { generateReports } from "../llm/generate";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -83,6 +84,16 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     const matchId = url.searchParams.get("match_id");
     if (!matchId) return json({ error: "match_id required" }, 400);
     return json(await buildOddsView(env, matchId));
+  }
+
+  // AI 白話報告（單場）
+  if (path === "/api/report") {
+    const matchId = url.searchParams.get("match_id");
+    if (!matchId) return json({ error: "match_id required" }, 400);
+    const row = await env.DB.prepare(
+      `SELECT content_md, llm_provider, llm_model, generated_at FROM reports WHERE match_id = ?1`,
+    ).bind(matchId).first();
+    return json({ report: row });
   }
 
   // 最新預測（單場用 match_id，或回傳全部最新一筆）
@@ -185,6 +196,12 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/admin/settle") {
       return json({ ok: true, ...(await settleMatches(env)) });
+    }
+    if (path === "/api/admin/report") {
+      const matchId = url.searchParams.get("match_id") ?? undefined;
+      const force = url.searchParams.get("force") === "1";
+      const limit = Number(url.searchParams.get("limit")) || undefined;
+      return json({ ok: true, ...(await generateReports(env, { matchId, force, limit })) });
     }
   }
 

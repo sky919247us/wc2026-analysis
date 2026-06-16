@@ -223,12 +223,42 @@ async function openDetail(matchId) {
 
       <div id="report-slot" class="dt-section">
         <h4>📝 AI 白話分析報告</h4>
-        <div class="report-md muted">AI 報告功能即將上線（Gemini 生成）。屆時此處顯示新手也看得懂的完整分析與最終推薦。</div>
+        <div class="report-md muted">載入中…</div>
       </div>
 
       <div class="disclaimer">⚠️ 以上分析由 AI 多模型自動生成，僅供娛樂參考，不構成投注建議。未滿 18 歲不得購買運動彩券，請理性投注。</div>`;
+
+    // 非同步載入 AI 白話報告（生成需時，獨立抓取不阻塞詳情顯示）
+    loadReport(matchId);
   } catch (e) {
     body.innerHTML = '<p class="muted">⚠️ 載入失敗</p>';
+  }
+}
+
+// 極簡 Markdown → HTML（標題/粗體/清單/段落），報告由 LLM 產出 markdown
+function mdToHtml(md) {
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return esc(md)
+    .replace(/^###?\s+(.+)$/gm, "<strong>$1</strong>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/^[-*]\s+(.+)$/gm, "• $1")
+    .replace(/\n{2,}/g, "<br><br>")
+    .replace(/\n/g, "<br>");
+}
+
+async function loadReport(matchId) {
+  const slot = document.querySelector("#report-slot .report-md");
+  if (!slot) return;
+  try {
+    const r = await api(`/api/report?match_id=${matchId}`);
+    if (r.report?.content_md) {
+      slot.classList.remove("muted");
+      slot.innerHTML = mdToHtml(r.report.content_md);
+    } else {
+      slot.textContent = "本場 AI 白話報告尚未生成（系統每小時自動為近期賽事產生）。";
+    }
+  } catch {
+    slot.textContent = "報告載入失敗。";
   }
 }
 

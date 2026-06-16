@@ -10,6 +10,7 @@ import { syncIntlOdds } from "./fetchers/oddsApi";
 import { syncOddsPapi } from "./fetchers/oddsPapi";
 import { runPredictions } from "./models/predict";
 import { settleMatches } from "./models/settle";
+import { generateReports } from "./llm/generate";
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -52,10 +53,23 @@ export default {
     // 每 20 分鐘：重算預測（吸收最新 Pinnacle 市場信號）
     if (minute % 20 === 0 && minute !== 0) ctx.waitUntil(runPredictions(env).then(() => {}));
 
+    // 每小時 10 分：對尚無報告的未開賽比賽生成 AI 白話報告（設了 LLM key 才跑）
+    const hasLLM = env.GEMINI_API_KEY || env.OPENAI_API_KEY || env.ANTHROPIC_API_KEY;
+    if (minute === 10 && hasLLM) ctx.waitUntil(runReportGen(env));
+
     // 每小時 30 分：先同步最新比分，再賽後對帳（更新戰績 + 完賽隊 Elo）
     if (minute === 30) ctx.waitUntil(runFixtureSync(env).then(() => settleMatches(env)).then(() => {}));
   },
 } satisfies ExportedHandler<Env>;
+
+async function runReportGen(env: Env): Promise<void> {
+  try {
+    const r = await generateReports(env, { limit: 8 }); // 每次最多 8 場，分批鋪滿
+    console.log(`report gen: ${r.generated} generated, ${r.skipped} skipped, errors: ${r.errors.join("; ") || "none"}`);
+  } catch (e) {
+    console.error("report gen failed", e);
+  }
+}
 
 async function runOddsPapiSync(env: Env): Promise<void> {
   try {
