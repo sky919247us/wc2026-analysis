@@ -11,9 +11,12 @@ import { NAME_TO_TLA } from "./teamNames";
 const SPORT = "soccer_fifa_world_cup";
 const BOOKMAKERS = "pinnacle,bet365";
 
-/** 所有設定的 The Odds API key（合併額度，輪替使用） */
+/** 所有設定的 The Odds API key（ODDS_API_KEY + ...KEY2..KEY9，合併額度輪替） */
 function oddsKeys(env: Env): string[] {
-  return [env.ODDS_API_KEY, env.ODDS_API_KEY2, env.ODDS_API_KEY3].filter((k): k is string => !!k);
+  const names = ["ODDS_API_KEY", "ODDS_API_KEY2", "ODDS_API_KEY3", "ODDS_API_KEY4",
+    "ODDS_API_KEY5", "ODDS_API_KEY6", "ODDS_API_KEY7", "ODDS_API_KEY8", "ODDS_API_KEY9"];
+  return names.map((n) => (env as unknown as Record<string, string | undefined>)[n])
+    .filter((k): k is string => !!k);
 }
 
 /**
