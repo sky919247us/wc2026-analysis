@@ -145,6 +145,19 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
 .report-md { background: var(--panel); border-radius: 12px; padding: 18px; line-height: 1.7; white-space: pre-wrap; }
 .disclaimer { font-size: .8rem; color: var(--muted); margin-top: 16px; padding: 10px; border: 1px dashed #ffffff20; border-radius: 8px; }
 
+/* ---- 串關 ---- */
+.value-legs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.value-leg { background: var(--panel2); border-radius: 999px; padding: 6px 14px; font-size: .85rem; }
+.value-leg .ev { color: var(--win); font-weight: 700; margin-left: 6px; }
+.parlay-card { background: var(--panel); border: 1px solid #ffffff12; border-radius: 14px; padding: 16px 18px; margin-bottom: 14px; }
+.parlay-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.parlay-type { font-weight: 700; color: var(--accent); }
+.parlay-metrics { display: flex; gap: 16px; font-size: .85rem; }
+.parlay-metrics b { font-size: 1.05rem; }
+.parlay-leg { display: flex; justify-content: space-between; padding: 7px 0; border-top: 1px solid #ffffff0d; font-size: .9rem; }
+.parlay-leg .pick { color: var(--accent2); font-weight: 600; }
+.empty-note { background: var(--panel); border: 1px dashed #ffffff20; border-radius: 14px; padding: 30px; text-align: center; color: var(--muted); }
+
 /* ---- 新聞 ---- */
 .nfilter { background: transparent; color: var(--muted); border: 1px solid transparent; padding: 6px 14px; border-radius: 999px; cursor: pointer; }
 .nfilter.active { background: var(--accent); color: #fff; }

@@ -228,9 +228,8 @@ async function openDetail(matchId) {
     const twTime = twAt ? new Date(twAt).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : null;
     const evRows = oddsRes.tw_ev
       ? oddsRes.tw_ev.map((e) => {
-          const lbl = { home: "主勝", draw: "平局", away: "客勝" }[e.selection];
           const cls = e.ev > 0 ? "ev-pos" : "ev-neg";
-          return `<tr><td>${lbl}</td><td>${e.twOdds.toFixed(2)}</td>
+          return `<tr><td>${e.label ?? e.selection}</td><td>${e.twOdds.toFixed(2)}</td>
             <td>${pct(e.trueProb)}</td>
             <td class="${cls}">${e.ev > 0 ? "+" : ""}${(e.ev * 100).toFixed(1)}%</td></tr>`;
         }).join("")
@@ -339,6 +338,42 @@ async function loadReport(matchId) {
     }
   } catch {
     slot.textContent = "報告載入失敗。";
+  }
+}
+
+/* ---------- 串關建議 ---------- */
+async function loadParlays() {
+  const el = document.getElementById("parlays-body");
+  try {
+    const d = await api("/api/parlays");
+    const legs = d.valueLegs || [], parlays = d.parlays || [];
+    if (!legs.length) {
+      el.innerHTML = `<div class="empty-note">目前沒有偵測到正期望值（+EV）的單注。<br>
+        台灣運彩水位較重時這是正常的——有價值的盤口出現時會自動列出。<br>
+        <span style="font-size:.85rem">（需先用「手動加抓運彩賠率」更新運彩盤）</span></div>`;
+      return;
+    }
+    const legChips = legs.map((l) => `<span class="value-leg">${l.match}・${l.pick} @${l.odds}<span class="ev">+${l.ev}%</span></span>`).join("");
+    const cards = parlays.map((p) => `
+      <div class="parlay-card">
+        <div class="parlay-head">
+          <span class="parlay-type">${p.type}</span>
+          <div class="parlay-metrics">
+            <span>合併賠率 <b>${p.combinedOdds}</b></span>
+            <span>命中率 <b>${p.hitProb}%</b></span>
+            <span>EV <b class="ev-pos">+${p.combinedEv}%</b></span>
+          </div>
+        </div>
+        ${p.legs.map((l) => `<div class="parlay-leg"><span>${l.match}</span><span class="pick">${l.pick} @${l.odds}</span></div>`).join("")}
+      </div>`).join("");
+    el.innerHTML = `
+      <h4 style="color:var(--accent2);margin-bottom:10px">💎 偵測到的價值單注（+EV）</h4>
+      <div class="value-legs">${legChips}</div>
+      <h4 style="color:var(--accent2);margin:18px 0 10px">🎯 推薦串關組合</h4>
+      ${cards || '<p class="muted">價值單注不足 2 注，暫無串關組合。</p>'}
+      <div class="disclaimer">⚠️ 串關風險隨關數放大，命中率下降。EV 為統計期望值，非保證。僅供參考，未滿18歲不得購買運動彩券，理性投注。</div>`;
+  } catch {
+    el.innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';
   }
 }
 
@@ -462,3 +497,4 @@ loadTeams();
 loadAnalysis();
 loadTrack();
 loadNews();
+loadParlays();

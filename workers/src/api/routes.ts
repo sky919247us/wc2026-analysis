@@ -13,6 +13,7 @@ import { handleIngest } from "./ingest";
 import { evForMarket } from "../models/ev";
 import { runPredictions } from "../models/predict";
 import { settleMatches } from "../models/settle";
+import { buildParlays } from "../models/parlays";
 import { generateReports } from "../llm/generate";
 import { fetchNews } from "../fetchers/news";
 import { handleWebhook } from "../notify/telegram";
@@ -206,6 +207,11 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     return json({ news: results });
   }
 
+  // 串關建議（+EV 單注組合）
+  if (path === "/api/parlays") {
+    return json(await buildParlays(env));
+  }
+
   // 最近的盤口異動警報
   if (path === "/api/alerts") {
     const { results } = await env.DB.prepare(
@@ -294,17 +300,20 @@ async function buildOddsView(env: Env, matchId: string) {
     };
   }
 
-  // 台灣運彩 EV：以 Pinnacle 去水機率為基準
-  let evView = null;
-  const pin = view.pinnacle?.["1x2"];
-  const tw = view.tw?.["1x2"];
+  // 台灣運彩 EV（1x2 + 大小球），以 Pinnacle 去水機率為基準
+  const evView: any[] = [];
+  const SEL_ZH: Record<string, string> = { home: "主勝", draw: "和局", away: "客勝", over: "大 2.5", under: "小 2.5" };
+  const pin = view.pinnacle?.["1x2"], tw = view.tw?.["1x2"];
   if (pin?.home && pin?.draw && pin?.away && tw?.home && tw?.draw && tw?.away) {
-    evView = evForMarket(
-      ["home", "draw", "away"],
-      [tw.home.odds, tw.draw.odds, tw.away.odds],
-      [pin.home.odds, pin.draw.odds, pin.away.odds],
-    );
+    for (const e of evForMarket(["home", "draw", "away"], [tw.home.odds, tw.draw.odds, tw.away.odds], [pin.home.odds, pin.draw.odds, pin.away.odds]))
+      evView.push({ market: "1x2", label: SEL_ZH[e.selection], ...e });
+  }
+  const pinT = view.pinnacle?.total, twT = view.tw?.total;
+  const pinO = pinT?.["over@2.5"], pinU = pinT?.["under@2.5"], twO = twT?.["over@2.5"], twU = twT?.["under@2.5"];
+  if (pinO && pinU && twO && twU) {
+    for (const e of evForMarket(["over", "under"], [twO.odds, twU.odds], [pinO.odds, pinU.odds]))
+      evView.push({ market: "total", label: SEL_ZH[e.selection], ...e });
   }
 
-  return { match_id: matchId, sources: view, tw_ev: evView };
+  return { match_id: matchId, sources: view, tw_ev: evView.length ? evView : null };
 }
