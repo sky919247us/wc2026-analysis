@@ -37,9 +37,11 @@ export default {
 
     // 每 5 分鐘：台灣運彩賠率快照 + 異動偵測（Phase 2）
 
-    // 國際賠率來源（擇一即可，依設定的 key 自動啟用）：
-    // a) The Odds API：每 15 分鐘（額度為信用點，較寬）
-    if (minute % 15 === 0 && env.ODDS_API_KEY) ctx.waitUntil(runIntlOddsSync(env));
+    // The Odds API 自適應抓取（免費 500 點/月）：
+    //   比賽日（最近一場開球在 +12h 內、或進行中）→ 每 ~90 分鐘抓一次
+    //   無比賽 → 完全不抓，省額度
+    // cron 每 5 分鐘觸發，實際是否抓由 maybeSyncOdds 內部判斷。
+    if (env.ODDS_API_KEY) ctx.waitUntil(maybeSyncOdds(env));
     // b) OddsPapi：免費僅 250 req/月，故一天只跑 2 次（UTC 02:00 / 14:00）整點
     if (minute === 0 && (hour === 2 || hour === 14) && env.ODDSPAPI_KEY)
       ctx.waitUntil(runOddsPapiSync(env));
@@ -78,6 +80,23 @@ async function runOddsPapiSync(env: Env): Promise<void> {
   } catch (e) {
     console.error("oddspapi sync failed", e);
   }
+}
+
+/** 自適應：僅在比賽日、且距上次抓取 ≥88 分鐘時才抓 The Odds API */
+async function maybeSyncOdds(env: Env): Promise<void> {
+  // 比賽日判定：有 SCHEDULED 比賽於未來 12h 內開球，或有進行中（開球在過去 2.5h 內）
+  const active = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM matches
+     WHERE status != 'FINISHED'
+       AND kickoff_utc <= datetime('now', '+12 hours')
+       AND kickoff_utc >= datetime('now', '-2.5 hours')`,
+  ).first<{ n: number }>();
+  if (!active || active.n === 0) return; // 無比賽 → 不抓
+
+  const last = await env.CACHE.get("odds:lastSync");
+  if (last && Date.now() - new Date(last).getTime() < 88 * 60_000) return; // 未滿 ~90 分鐘
+
+  await runIntlOddsSync(env);
 }
 
 async function runIntlOddsSync(env: Env): Promise<void> {
