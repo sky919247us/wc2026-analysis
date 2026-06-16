@@ -18,7 +18,7 @@ import { buildParlays } from "../models/parlays";
 import { syncOutright } from "../fetchers/outright";
 import { generateReports } from "../llm/generate";
 import { fetchNews } from "../fetchers/news";
-import { handleWebhook } from "../notify/telegram";
+import { handleWebhook, broadcast } from "../notify/telegram";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -311,6 +311,16 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/admin/outright") {
       return json({ ok: true, ...(await syncOutright(env)) });
+    }
+    if (path === "/api/admin/daily-push") {
+      const { valueLegs, parlays } = await buildParlays(env);
+      if (!valueLegs.length) return json({ ok: true, sent: 0, note: "no +EV legs" });
+      const date = new Date().toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric" });
+      const legLines = valueLegs.slice(0, 5).map((l: any) => `• ${l.match}・${l.pick} @${l.odds}（EV +${l.ev}%）`).join("\n");
+      const best = parlays[0];
+      const pb = best ? `\n\n🎯 <b>推薦串關（${best.type}）</b>\n合併賠率 ${best.combinedOdds}・命中 ${best.hitProb}%・EV +${best.combinedEv}%\n` + best.legs.map((l: any) => `  └ ${l.match}・${l.pick} @${l.odds}`).join("\n") : "";
+      const sent = await broadcast(env, `💎 <b>今日 +EV 精選（${date}）</b>\n\n${legLines}${pb}\n\n<i>以 Pinnacle 去水機率衡量。僅供參考，未滿18歲不得購買運動彩券，理性投注。</i>`);
+      return json({ ok: true, sent });
     }
     if (path === "/api/admin/outright-ingest" && req.method === "POST") {
       const body = (await req.json()) as { source?: string; items?: { team_id: string; odds: number }[] };

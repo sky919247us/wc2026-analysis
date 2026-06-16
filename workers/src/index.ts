@@ -13,6 +13,8 @@ import { settleMatches } from "./models/settle";
 import { generateReports } from "./llm/generate";
 import { fetchNews } from "./fetchers/news";
 import { syncOutright } from "./fetchers/outright";
+import { buildParlays } from "./models/parlays";
+import { broadcast } from "./notify/telegram";
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -68,10 +70,30 @@ export default {
     if (minute === 0 && hour === 3 && env.ODDS_API_KEY)
       ctx.waitUntil(syncOutright(env).then(() => {}).catch((e) => console.error("outright", e)));
 
+    // 每日 UTC 08:00（台灣 16:00）：推播今日 +EV 精選 + 最佳串關
+    if (minute === 0 && hour === 8 && env.TELEGRAM_BOT_TOKEN)
+      ctx.waitUntil(pushDailyValue(env).catch((e) => console.error("dailyPush", e)));
+
     // 每小時 30 分：先同步最新比分，再賽後對帳（更新戰績 + 完賽隊 Elo）
     if (minute === 30) ctx.waitUntil(runFixtureSync(env).then(() => settleMatches(env)).then(() => {}));
   },
 } satisfies ExportedHandler<Env>;
+
+/** 每日推播：今日 +EV 精選單注 + 最佳串關 */
+async function pushDailyValue(env: Env): Promise<void> {
+  const { valueLegs, parlays } = await buildParlays(env);
+  if (!valueLegs.length) return; // 無正 EV 不推（不洗版）
+  const date = new Date().toLocaleDateString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric" });
+  const legLines = valueLegs.slice(0, 5).map((l: any) => `• ${l.match}・${l.pick} @${l.odds}（EV +${l.ev}%）`).join("\n");
+  const best = parlays[0];
+  const parlayBlock = best
+    ? `\n\n🎯 <b>推薦串關（${best.type}）</b>\n合併賠率 ${best.combinedOdds}・命中 ${best.hitProb}%・EV +${best.combinedEv}%\n` +
+      best.legs.map((l: any) => `  └ ${l.match}・${l.pick} @${l.odds}`).join("\n")
+    : "";
+  const msg = `💎 <b>今日 +EV 精選（${date}）</b>\n\n${legLines}${parlayBlock}\n\n<i>以 Pinnacle 去水機率衡量。串關風險隨關數放大。僅供參考，未滿18歲不得購買運動彩券，理性投注。</i>`;
+  const sent = await broadcast(env, msg);
+  console.log(`daily value push sent to ${sent} subscribers`);
+}
 
 async function runReportGen(env: Env): Promise<void> {
   try {
