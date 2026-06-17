@@ -43,19 +43,19 @@ export async function settleMatches(env: Env): Promise<{ settled: number; eloUpd
       const rec = (Object.keys(probs) as (keyof typeof probs)[])
         .reduce((a, b) => (probs[b] > probs[a] ? b : a));
 
-      const odds = await recommendOdds(env, m.id, rec, probs[rec]);
-      const hit = rec === actual ? 1 : 0;
-      const profit = hit ? +(odds - 1).toFixed(2) : -1;
-
-      // CLV：早盤 vs 收盤（開賽前最早一筆 vs 最後一筆快照），取最佳來源
+      // 只記錄「有真實 TW/Pinnacle 賠率」的場次：用真實早盤賠率算損益、收盤算 CLV。
+      // 沒有真實盤 → 不記入戰績（避免用模型推算賠率污染公開戰績），但仍更新 Elo。
       const { entry, closing } = await entryClosingOdds(env, m.id, rec, m.kickoff_utc);
-      const clv = entry && closing ? +((entry / closing - 1) * 100).toFixed(2) : null;
-
-      await env.DB.prepare(
-        `INSERT INTO track_record (match_id, recommended_market, recommended_odds, ev_at_recommend, hit, profit_units, closing_odds, clv, settled_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))`,
-      ).bind(m.id, rec, odds, null, hit, profit, closing ?? null, clv).run();
-      settled++;
+      if (entry && closing) {
+        const hit = rec === actual ? 1 : 0;
+        const profit = hit ? +(entry - 1).toFixed(2) : -1;
+        const clv = +((entry / closing - 1) * 100).toFixed(2);
+        await env.DB.prepare(
+          `INSERT INTO track_record (match_id, recommended_market, recommended_odds, ev_at_recommend, hit, profit_units, closing_odds, clv, settled_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))`,
+        ).bind(m.id, rec, entry, null, hit, profit, closing, clv).run();
+        settled++;
+      }
     }
 
     // 完賽後更新兩隊 Elo（供後續比賽用真實表現修正）
@@ -89,17 +89,4 @@ async function entryClosingOdds(env: Env, matchId: string, sel: string, kickoff:
     if (results && results.length) return { entry: results[0].odds, closing: results[results.length - 1].odds };
   }
   return { entry: null, closing: null };
-}
-
-/** 推薦方向的下注賠率：運彩 > Pinnacle > 融合機率倒數 */
-async function recommendOdds(env: Env, matchId: string, sel: string, prob: number): Promise<number> {
-  for (const source of ["tw", "pinnacle"]) {
-    const row = await env.DB.prepare(
-      `SELECT odds FROM odds_snapshots
-       WHERE match_id = ?1 AND source = ?2 AND market = '1x2' AND selection = ?3
-       ORDER BY captured_at DESC LIMIT 1`,
-    ).bind(matchId, source, sel).first<{ odds: number }>();
-    if (row?.odds) return row.odds;
-  }
-  return prob > 0 ? +(1 / prob).toFixed(2) : 2.0; // 無賠率：用機率倒數估（無水位）
 }
