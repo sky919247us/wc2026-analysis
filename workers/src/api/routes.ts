@@ -17,7 +17,7 @@ import { settleMatches } from "../models/settle";
 import { buildParlays } from "../models/parlays";
 import { syncOutright } from "../fetchers/outright";
 import { generateReports } from "../llm/generate";
-import { fetchNews } from "../fetchers/news";
+import { fetchNews, translateNews } from "../fetchers/news";
 import { generateDailySummary } from "../llm/daily";
 import { handleWebhook, broadcast } from "../notify/telegram";
 
@@ -237,7 +237,7 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     const tag = url.searchParams.get("tag");
     const where = tag ? "WHERE tags = ?1" : "";
     const stmt = env.DB.prepare(
-      `SELECT source, title, url, summary, lang, tags, published_at, fetched_at
+      `SELECT source, title, title_zh, url, summary, lang, tags, published_at, fetched_at
        FROM news ${where} ORDER BY COALESCE(published_at, fetched_at) DESC LIMIT 60`,
     );
     const { results } = await (tag ? stmt.bind(tag) : stmt).all();
@@ -314,7 +314,9 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
       return json({ ok: true, predictions: await runPredictions(env) });
     }
     if (path === "/api/admin/news") {
-      return json({ ok: true, ...(await fetchNews(env)) });
+      const f = await fetchNews(env);
+      const t = await translateNews(env, 40);
+      return json({ ok: true, ...f, ...t });
     }
     if (path === "/api/admin/outright") {
       return json({ ok: true, ...(await syncOutright(env)) });

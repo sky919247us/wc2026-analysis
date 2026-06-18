@@ -481,9 +481,12 @@ async function loadNews(tag = "worldcup") {
     if (!news.length) { el.innerHTML = '<p class="muted">尚無新聞（每 30 分鐘自動更新）</p>'; return; }
     el.innerHTML = news.map((n) => {
       const t = n.published_at ? new Date(n.published_at).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+      const title = n.title_zh || n.title;
+      const orig = n.title_zh ? `<div class="news-orig">${n.title}</div>` : "";
       return `<a class="card news-item" href="${n.url}" target="_blank" rel="noopener">
         <span class="news-src">${n.source}</span>${n.tags === "worldcup" ? '<span class="news-tag">世界盃</span>' : ""}
-        <div class="news-title">${n.title}</div>
+        <div class="news-title">${title}</div>
+        ${orig}
         ${n.summary ? `<div class="news-sum">${n.summary}</div>` : ""}
         <div class="news-time">${t}</div>
       </a>`;

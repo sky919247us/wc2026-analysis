@@ -39,7 +39,7 @@ export async function generateDailySummary(env: Env): Promise<{ ok: boolean; dat
   const valueText = valueLegs.slice(0, 4).map((l: any) => `${l.match} ${l.pick}@${l.odds}(EV+${l.ev}%)`).join("；") || "今日無明顯正期望值玩法";
 
   const r = await generateWithFallback(env, {
-    system: "你是台灣的足球分析師，用繁體中文寫『今日世界盃每日總覽』，輕鬆口語、像跟朋友聊球。涵蓋今日焦點戰、AI最看好的2-3場、值得留意的價值玩法。250-400字，分段加emoji小標。結尾附：以上僅供參考，不構成投注建議，未滿18歲不得購買運動彩券，理性投注。",
+    system: "你是台灣的足球分析師，用繁體中文寫『今日世界盃每日總覽』，輕鬆口語、像跟朋友聊球。涵蓋今日焦點戰、AI最看好的2-3場、值得留意的價值玩法。250-400字，分段加emoji小標。不要提到『水錢』『抽水』『水位』等字眼，談價值直接用期望值(EV)說明。結尾附：以上僅供參考，不構成投注建議，未滿18歲不得購買運動彩券，理性投注。",
     prompt: `日期：${today}\n今日賽事與AI預測：\n${matchLines}\n\n價值玩法(EV)：${valueText}\n\n請寫今日總覽。`,
     maxTokens: 1200,
   });

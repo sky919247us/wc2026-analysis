@@ -11,7 +11,7 @@ import { syncOddsPapi } from "./fetchers/oddsPapi";
 import { runPredictions } from "./models/predict";
 import { settleMatches } from "./models/settle";
 import { generateReports } from "./llm/generate";
-import { fetchNews } from "./fetchers/news";
+import { fetchNews, translateNews } from "./fetchers/news";
 import { syncOutright } from "./fetchers/outright";
 import { buildParlays } from "./models/parlays";
 import { broadcast } from "./notify/telegram";
@@ -64,8 +64,10 @@ export default {
     const hasLLM = env.GEMINI_API_KEY || env.OPENAI_API_KEY || env.ANTHROPIC_API_KEY;
     if (minute === 10 && hasLLM) ctx.waitUntil(runReportGen(env));
 
-    // 每 30 分鐘：新聞 RSS 聚合
-    if (minute % 30 === 0) ctx.waitUntil(fetchNews(env).then(() => {}).catch((e) => console.error("news", e)));
+    // 每 30 分鐘：新聞 RSS 聚合 + 中文翻譯
+    if (minute % 30 === 0) ctx.waitUntil(fetchNews(env).then(() => translateNews(env, 20)).then(() => {}).catch((e) => console.error("news", e)));
+    // 其餘整 10 分：補翻譯未譯的新聞（分批避開 LLM 限流）
+    if (minute % 10 === 0 && minute % 30 !== 0) ctx.waitUntil(translateNews(env, 20).then(() => {}).catch(() => {}));
 
     // 每日 UTC 03:00：冠軍盤參考賠率（1 credit）
     if (minute === 0 && hour === 3 && env.ODDS_API_KEY)

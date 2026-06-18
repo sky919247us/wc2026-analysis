@@ -176,6 +176,7 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
 .news-src { font-size: .78rem; color: var(--accent2); }
 .news-tag { font-size: .7rem; background: var(--accent); color: #fff; padding: 1px 8px; border-radius: 999px; margin-left: 6px; }
 .news-title { font-size: 1.02rem; font-weight: 600; margin: 6px 0; }
+.news-orig { font-size: .8rem; color: var(--muted); margin-bottom: 4px; }
 .news-sum { font-size: .88rem; color: var(--muted); line-height: 1.5; }
 .news-time { font-size: .75rem; color: var(--muted); margin-top: 6px; }
 
