@@ -19,6 +19,8 @@ export async function generateReports(env: Env, opts: { matchId?: string; force?
   let generated = 0, skipped = 0;
 
   // 取未開賽、各場最新一筆預測（可指定單場）
+  // 非強制時：只挑「還沒有報告」的場次（避免每次都卡在最早幾場）
+  const noReport = opts.force ? "" : "AND r.match_id IS NULL";
   const where = opts.matchId ? "AND p.match_id = ?2" : "";
   const stmt = env.DB.prepare(
     `SELECT p.match_id, p.prob_home, p.prob_draw, p.prob_away, p.xg_home, p.xg_away,
@@ -31,18 +33,13 @@ export async function generateReports(env: Env, opts: { matchId?: string; force?
      JOIN matches m ON m.id = p.match_id
      JOIN teams h ON h.id = m.home_id
      JOIN teams a ON a.id = m.away_id
-     WHERE m.status != 'FINISHED' ${where}
+     LEFT JOIN reports r ON r.match_id = p.match_id
+     WHERE m.status != 'FINISHED' ${noReport} ${where}
      ORDER BY m.kickoff_utc LIMIT ?1`,
   );
   const { results } = await (opts.matchId ? stmt.bind(limit, opts.matchId) : stmt.bind(limit)).all<PredRow>();
 
   for (const p of results ?? []) {
-    // 已有報告且非強制 → 跳過（省 API）
-    if (!opts.force) {
-      const existing = await env.DB.prepare(`SELECT match_id FROM reports WHERE match_id = ?1`).bind(p.match_id).first();
-      if (existing) { skipped++; continue; }
-    }
-
     // 台灣運彩 EV（有 tw + pinnacle 1x2 才算）
     const twEv = await buildTwEv(env, p.match_id);
 
