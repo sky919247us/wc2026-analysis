@@ -42,6 +42,16 @@ document.querySelectorAll(".tab").forEach((btn) => {
 });
 
 /* ---------- 比分盤 ---------- */
+// LIVE 概估進行時間（從開球推算，處理中場休息）。非官方精準分鐘，標「約」。
+function liveMinute(kickoffUtc) {
+  const raw = Math.floor((Date.now() - new Date(kickoffUtc).getTime()) / 60000);
+  if (raw < 0) return "";
+  if (raw <= 45) return `約 ${raw}'`;
+  if (raw <= 60) return "中場附近";
+  const m = Math.min(90, raw - 15);
+  return m >= 90 ? "約 90'+" : `約 ${m}'`;
+}
+
 const stageZh = (s) =>
   s.startsWith("GROUP_") ? `小組賽 ${s.replace("GROUP_", "")} 組`
   : { LAST_32: "32 強", LAST_16: "16 強", QUARTER_FINALS: "8 強", SEMI_FINALS: "4 強",
@@ -56,7 +66,7 @@ function renderMatches(matches) {
     const mid = m.status === "FINISHED" || m.status === "LIVE"
       ? `<div class="score">${m.home_score ?? "-"} : ${m.away_score ?? "-"}</div>`
       : `<div>VS</div>`;
-    const badge = m.status === "LIVE" ? '<span class="badge live">LIVE</span>'
+    const badge = m.status === "LIVE" ? `<span class="badge live">🔴 LIVE ${liveMinute(m.kickoff_utc)}</span>`
       : m.status === "FINISHED" ? '<span class="badge">已完賽</span>'
       : `<span class="badge">${local}</span>`;
     return `<div class="card match">

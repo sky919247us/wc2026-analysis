@@ -54,6 +54,9 @@ export default {
     // 每 30 分鐘：新聞 RSS（Phase 2）
     // if (minute % 30 === 0) ...
 
+    // 進行中比賽：每 5 分鐘更新比分（只在有 LIVE 比賽時，免費源足夠）
+    if (minute !== 0 && minute !== 30) ctx.waitUntil(syncLiveScores(env));
+
     // 每小時整點：賽程 + 積分榜同步，接著重算預測
     if (minute === 0) ctx.waitUntil(runFixtureSync(env).then(() => runPredictions(env)).then(() => {}));
 
@@ -192,6 +195,14 @@ async function runIntlOddsSync(env: Env): Promise<void> {
   } catch (e) {
     console.error("intl odds sync failed", e);
   }
+}
+
+/** 有進行中比賽時才同步比分（讓 LIVE 比分每 5 分鐘更新） */
+async function syncLiveScores(env: Env): Promise<void> {
+  try {
+    const live = await env.DB.prepare(`SELECT COUNT(*) AS n FROM matches WHERE status = 'LIVE'`).first<{ n: number }>();
+    if (live && live.n > 0) await syncMatches(env);
+  } catch (e) { console.error("liveScore", e); }
 }
 
 async function runFixtureSync(env: Env): Promise<void> {
