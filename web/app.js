@@ -146,7 +146,7 @@ async function loadDailySummary() {
     const d = await api("/api/daily-summary");
     if (d.summary?.content && d.summary.content.length > 20) {
       el.innerHTML = `<div class="card daily-card">
-        <div class="daily-title">📰 今日總覽 <span class="muted">${d.summary.date}</span></div>
+        <div class="daily-title">📰 今日總覽・未來24小時 <span class="muted">${d.summary.date}</span></div>
         <div class="report-md">${mdToHtml(d.summary.content)}</div>
       </div>`;
     }

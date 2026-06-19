@@ -6,7 +6,7 @@ import { generateWithFallback } from "./provider";
 import { buildParlays } from "../models/parlays";
 
 export async function generateDailySummary(env: Env): Promise<{ ok: boolean; date: string }> {
-  // 今日（台灣時區）賽事 + 最新預測
+  // 接下來 24 小時內開賽的賽事 + 最新預測
   const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Taipei" });
   const { results: matches } = await env.DB.prepare(
     `SELECT h.name_zh AS home_zh, a.name_zh AS away_zh, m.kickoff_utc,
@@ -15,17 +15,19 @@ export async function generateDailySummary(env: Env): Promise<{ ok: boolean; dat
      JOIN teams h ON h.id = m.home_id JOIN teams a ON a.id = m.away_id
      LEFT JOIN (SELECT match_id, MAX(created_at) mx FROM predictions GROUP BY match_id) lp ON lp.match_id = m.id
      LEFT JOIN predictions p ON p.match_id = m.id AND p.created_at = lp.mx
-     WHERE date(m.kickoff_utc, '+8 hours') = ?1
+     WHERE m.status != 'FINISHED'
+       AND m.kickoff_utc >= datetime('now')
+       AND m.kickoff_utc <= datetime('now', '+24 hours')
      ORDER BY m.kickoff_utc`,
-  ).bind(today).all<any>();
+  ).all<any>();
 
   if (!matches?.length) {
-    await env.CACHE.put("daily:summary", JSON.stringify({ date: today, content: "今日無世界盃賽事。", generatedAt: new Date().toISOString() }));
+    await env.CACHE.put("daily:summary", JSON.stringify({ date: today, content: "未來 24 小時內無世界盃賽事。", generatedAt: new Date().toISOString() }));
     return { ok: true, date: today };
   }
 
   const matchLines = matches.map((m: any) => {
-    const t = new Date(m.kickoff_utc).toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour: "2-digit", minute: "2-digit" });
+    const t = new Date(m.kickoff_utc).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
     let pick = "";
     if (m.prob_home != null) {
       const mx = Math.max(m.prob_home, m.prob_draw, m.prob_away);
@@ -39,8 +41,8 @@ export async function generateDailySummary(env: Env): Promise<{ ok: boolean; dat
   const valueText = valueLegs.slice(0, 4).map((l: any) => `${l.match} ${l.pick}@${l.odds}(EV+${l.ev}%)`).join("；") || "今日無明顯正期望值玩法";
 
   const r = await generateWithFallback(env, {
-    system: "你是台灣的足球分析師，用繁體中文寫『今日世界盃每日總覽』，輕鬆口語、像跟朋友聊球。涵蓋今日焦點戰、AI最看好的2-3場、值得留意的價值玩法。250-400字，分段加emoji小標。不要提到『水錢』『抽水』『水位』等字眼，談價值直接用期望值(EV)說明。結尾附：以上僅供參考，不構成投注建議，未滿18歲不得購買運動彩券，理性投注。",
-    prompt: `日期：${today}\n今日賽事與AI預測：\n${matchLines}\n\n價值玩法(EV)：${valueText}\n\n請寫今日總覽。`,
+    system: "你是台灣的足球分析師，用繁體中文寫『未來24小時世界盃賽事總覽』，輕鬆口語、像跟朋友聊球。涵蓋接下來24小時的焦點戰、AI最看好的2-3場、值得留意的價值玩法。250-400字，分段加emoji小標。不要提到『水錢』『抽水』『水位』等字眼，談價值直接用期望值(EV)說明。結尾附：以上僅供參考，不構成投注建議，未滿18歲不得購買運動彩券，理性投注。",
+    prompt: `產生時間：${today} 下午3點（台灣）\n接下來24小時的賽事與AI預測（時間為台灣時間）：\n${matchLines}\n\n價值玩法(EV)：${valueText}\n\n請寫未來24小時賽事總覽。`,
     maxTokens: 1200,
   });
 

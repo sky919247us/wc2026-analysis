@@ -76,8 +76,8 @@ export default {
     if (minute === 0 && hour === 3 && env.ODDS_API_KEY)
       ctx.waitUntil(syncOutright(env).then(() => {}).catch((e) => console.error("outright", e)));
 
-    // 每日 UTC 07:30（台灣 15:30）：生成每日總覽（需 LLM key）
-    if (minute === 30 && hour === 7 && (env.GEMINI_API_KEY || env.OPENAI_API_KEY || env.ANTHROPIC_API_KEY))
+    // 每日 UTC 07:00（台灣 15:00）：生成未來 24 小時賽事總覽（需 LLM key）
+    if (minute === 0 && hour === 7 && (env.GEMINI_API_KEY || env.OPENAI_API_KEY || env.ANTHROPIC_API_KEY))
       ctx.waitUntil(generateDailySummary(env).then(() => {}).catch((e) => console.error("dailySummary", e)));
 
     // 每日 UTC 08:00（台灣 16:00）：推播今日 +EV 精選 + 最佳串關
