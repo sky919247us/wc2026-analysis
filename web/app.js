@@ -515,15 +515,30 @@ document.querySelectorAll(".nfilter").forEach((b) =>
 /* ---------- 戰績頁 ---------- */
 const selZh = (s) => ({ home: "主勝", draw: "平局", away: "客勝" }[s] || s);
 
+// 已預測、待開賽區塊（戰績頁共用）
+function buildPendingBlock(t) {
+  if (!t.pending || !t.pending.length) return "";
+  const pick = (p) => { const mx = Math.max(p.prob_home, p.prob_draw, p.prob_away); return mx === p.prob_home ? "home" : mx === p.prob_away ? "away" : "draw"; };
+  const rows = t.pending.map((p) => {
+    const kt = new Date(p.kickoff_utc).toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    return `<tr><td>${p.home_zh} vs ${p.away_zh}</td><td>${selZh(pick(p))}</td><td>${p.pick_odds ? p.pick_odds.toFixed(2) : "-"}</td><td class="muted">信心 ${p.confidence}</td><td class="muted">${kt}</td></tr>`;
+  }).join("");
+  return `<div class="card" style="margin-bottom:16px">
+    <h4 style="color:var(--accent2);margin-bottom:10px">📋 已預測・待開賽（${t.pending.length} 場）</h4>
+    <table class="rec-table"><tr><th style="text-align:left">比賽</th><th>AI 推薦</th><th>賠率</th><th>信心</th><th>開賽</th></tr>${rows}</table>
+    <p class="muted" style="font-size:.8rem;margin-top:8px">這些是 AI 已鎖定的預測；比賽結束後會自動移到上方戰績並結算損益與 CLV。</p>
+  </div>`;
+}
+
 async function loadTrack() {
   const el = document.getElementById("track-body");
   try {
     const t = await api("/api/track");
     if (!t.total) {
-      el.innerHTML = `<div class="track-empty">
+      el.innerHTML = `${buildPendingBlock(t)}<div class="track-empty">
         <h3>戰績累積中</h3>
-        <p>系統只記錄「開賽前已預測」的場次，賽後自動對帳。<br>
-        待已預測的比賽陸續完賽後，這裡會公開累積命中率與報酬率。</p>
+        <p>上方為 AI 已預測、尚未開賽的場次。<br>
+        比賽結束後會自動結算，於此公開累積命中率、報酬率與 CLV。</p>
       </div>`;
       return;
     }
@@ -543,6 +558,7 @@ async function loadTrack() {
       <td class="${r.profit_units >= 0 ? "tag-hit" : "tag-miss"}">${r.profit_units >= 0 ? "+" : ""}${r.profit_units?.toFixed(2)}</td>
     </tr>`).join("");
 
+
     el.innerHTML = `
       <div class="track-hero">
         <div class="track-stat"><div class="big">${t.total}</div><div class="lbl">已對帳場次</div></div>
@@ -554,13 +570,15 @@ async function loadTrack() {
       ${t.avgClv != null ? '<p class="muted" style="font-size:.8rem;margin:-10px 0 18px">CLV（收盤線價值）：推薦時機的賠率相對開賽前收盤賠率。長期為正＝系統性領先市場，是真實 edge 的指標。</p>' : ""}
       ${grades ? `<div class="grade-stats">${grades}</div>` : ""}
       <div class="card">
+        <h4 style="color:var(--accent2);margin-bottom:10px">✅ 已結算</h4>
         <table class="rec-table">
-          <tr><th>比賽（實際比分）</th><th>AI 推薦</th><th>賠率</th><th>結果</th><th>損益</th></tr>
+          <tr><th style="text-align:left">比賽（實際比分）</th><th>AI 推薦</th><th>賠率</th><th>結果</th><th>損益</th></tr>
           ${rows}
         </table>
       </div>
+      ${buildPendingBlock(t)}
       <p class="muted" style="font-size:.8rem;margin-top:14px">
-        平準注：每場固定下注 1 注，命中得（賠率−1），未中失 1。賠率優先採台灣運彩，無則 Pinnacle，再無則以模型機率估算。僅供參考，不構成投注建議。
+        平準注：每場固定下注 1 注，命中得（賠率−1），未中失 1。只記錄有真實賠率的場次。僅供參考，不構成投注建議。
       </p>`;
   } catch {
     el.innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';

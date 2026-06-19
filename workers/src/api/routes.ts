@@ -217,10 +217,27 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
        ORDER BY tr.settled_at DESC LIMIT 50`,
     ).all();
 
+    // 已預測、尚未開賽的場次（顯示 AI 推薦方向，打完後自動進上方戰績）
+    const pending = await env.DB.prepare(
+      `SELECT p.match_id, p.prob_home, p.prob_draw, p.prob_away, p.confidence,
+              h.name_zh AS home_zh, a.name_zh AS away_zh, m.kickoff_utc,
+              (SELECT odds FROM odds_snapshots s WHERE s.match_id = p.match_id AND s.market='1x2'
+                 AND s.selection = CASE WHEN p.prob_home>=p.prob_draw AND p.prob_home>=p.prob_away THEN 'home'
+                                        WHEN p.prob_away>=p.prob_draw AND p.prob_away>=p.prob_home THEN 'away' ELSE 'draw' END
+                 AND s.source IN ('tw','pinnacle') ORDER BY s.captured_at DESC LIMIT 1) AS pick_odds
+       FROM predictions p
+       JOIN (SELECT match_id, MAX(created_at) mx FROM predictions GROUP BY match_id) lp ON lp.match_id=p.match_id AND lp.mx=p.created_at
+       JOIN matches m ON m.id = p.match_id
+       JOIN teams h ON h.id = m.home_id JOIN teams a ON a.id = m.away_id
+       WHERE m.status = 'SCHEDULED'
+       ORDER BY m.kickoff_utc LIMIT 60`,
+    ).all();
+
     const total = summary?.total ?? 0;
     const hits = summary?.hits ?? 0;
     const profit = summary?.profit ?? 0;
     return json({
+      pending: pending.results,
       total, hits,
       hitRate: total ? +((hits / total) * 100).toFixed(1) : 0,
       profitUnits: profit,
