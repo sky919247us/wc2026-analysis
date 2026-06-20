@@ -198,6 +198,12 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
 
 footer { padding: 20px; text-align: center; font-size: .85rem; color: var(--muted); border-top: 1px solid #ffffff10; }
 .muted { color: var(--muted); }
+.ncode { display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .5px; padding: 1px 5px; border-radius: 4px; background: #ffffff14; color: var(--muted); vertical-align: middle; }
+/* 奪冠機率榜名次箭頭（符號，非 emoji） */
+.rk { display: inline-block; width: 1em; text-align: center; font-weight: 700; }
+.rk-up { color: var(--lose); }   /* 上升 紅 ▲ */
+.rk-down { color: var(--win); }  /* 下降 綠 ▼ */
+.rk-flat { color: var(--muted); }
 /* ============ 手機 RWD（<=720px）============ */
 @media (max-width: 720px) {
   /* 頁首：品牌在上，分頁列改為可橫向捲動（避免 8 個分頁擠成多排）*/

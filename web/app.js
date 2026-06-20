@@ -11,8 +11,13 @@ const FLAGS = {
   NOR:"🇳🇴",SWE:"🇸🇪",POL:"🇵🇱",AUT:"🇦🇹",SRB:"🇷🇸",TUR:"🇹🇷",UKR:"🇺🇦",HUN:"🇭🇺",
   SVK:"🇸🇰",SVN:"🇸🇮",ROU:"🇷🇴",GRE:"🇬🇷",ALB:"🇦🇱",GEO:"🇬🇪",UZB:"🇺🇿",JOR:"🇯🇴",
   IRQ:"🇮🇶",UAE:"🇦🇪",CUW:"🇨🇼",HAI:"🇭🇹",CPV:"🇨🇻",
+  URY:"🇺🇾",BIH:"🇧🇦",COD:"🇨🇩",CUR:"🇨🇼",
 };
-const flag = (tla) => FLAGS[tla] || "🏳️";
+// 子地區（無 ISO 兩碼旗，emoji 會變黑旗）→ 用文字代碼
+const TEXTCODE = { ENG: "ENG", SCO: "SCO", WAL: "WAL" };
+const flag = (tla) =>
+  TEXTCODE[tla] ? `<span class="ncode">${TEXTCODE[tla]}</span>`
+  : FLAGS[tla] || `<span class="ncode">${tla || "?"}</span>`;
 
 /* 自選關注（localStorage，無需登入） */
 const FAV_KEY = "wc:favs";
@@ -430,8 +435,9 @@ async function loadOutright() {
     const board = d.board || [];
     if (!board.length) { el.innerHTML = '<p class="muted">冠軍盤資料尚未同步</p>'; return; }
     const hasTw = board.some((b) => b.twOdds != null);
+    const arrow = (c) => c > 0 ? '<span class="rk rk-up">▲</span>' : c < 0 ? '<span class="rk rk-down">▼</span>' : '<span class="rk rk-flat">—</span>';
     const rows = board.map((b, i) => `<tr>
-      <td>${i + 1}</td>
+      <td>${i + 1} ${arrow(b.rankChange)}</td>
       <td class="name">${flag(b.team_id)} ${b.name}</td>
       <td><b>${(b.trueProb * 100).toFixed(1)}%</b></td>
       <td>${b.marketOdds?.toFixed(1) ?? "-"}</td>
@@ -591,7 +597,7 @@ function renderTeams(teams) {
   const formHtml = (f) => f ? `<div class="form-row">${[...f].map((r) => `<span class="form-dot f-${r}">${r}</span>`).join("")}</div>` : "";
   document.getElementById("team-grid").innerHTML = teams.map((t) => `<div class="card team-card">
     <button class="fav-btn ${isFav(t.id) ? "on" : ""}" data-fav="${t.id}">${isFav(t.id) ? "★" : "☆"}</button>
-    <div class="tla">${flag(t.id)} ${t.id}</div>
+    <div class="tla">${t.id}</div>
     <div class="zh">${t.name_zh}</div>
     <div class="muted">${t.name_en}</div>
     <span class="badge">${t.grp ? `${t.grp} 組` : "分組未定"}</span>

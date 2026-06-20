@@ -261,13 +261,31 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     return json({ news: results });
   }
 
-  // 冠軍盤：奪冠機率榜（參考盤去水）+ 台灣運彩冠軍賠率 + EV
+  // 冠軍盤：奪冠機率榜（參考盤去水）+ 台灣運彩冠軍賠率 + EV + 名次異動
   if (path === "/api/outright") {
+    // 參考盤最近兩個快照時間（算名次變化）
+    const times = await env.DB.prepare(
+      `SELECT DISTINCT captured_at FROM outright_odds WHERE source='market' ORDER BY captured_at DESC LIMIT 2`,
+    ).all<{ captured_at: string }>();
+    const tCurr = times.results?.[0]?.captured_at, tPrev = times.results?.[1]?.captured_at;
+
+    // 依某時刻的參考盤賠率 → 去水機率 → 名次（team_id → rank, 1 起）
+    const ranksAt = async (t?: string): Promise<Record<string, number>> => {
+      if (!t) return {};
+      const { results } = await env.DB.prepare(
+        `SELECT team_id, odds FROM outright_odds WHERE source='market' AND captured_at = ?1`,
+      ).bind(t).all<{ team_id: string; odds: number }>();
+      const sorted = (results ?? []).filter((r) => r.odds > 1).sort((a, b) => a.odds - b.odds);
+      const m: Record<string, number> = {};
+      sorted.forEach((r, i) => (m[r.team_id] = i + 1));
+      return m;
+    };
+    const currRanks = await ranksAt(tCurr), prevRanks = await ranksAt(tPrev);
+
+    // 當前參考盤 + 台灣運彩冠軍賠率
     const { results } = await env.DB.prepare(
-      `SELECT o.source, o.team_id, o.odds, t.name_zh, t.id,
-              (SELECT MAX(captured_at) FROM outright_odds o2 WHERE o2.team_id=o.team_id AND o2.source=o.source) AS mx
-       FROM outright_odds o
-       JOIN teams t ON t.id = o.team_id
+      `SELECT o.source, o.team_id, o.odds, t.name_zh
+       FROM outright_odds o JOIN teams t ON t.id = o.team_id
        WHERE o.captured_at = (SELECT MAX(captured_at) FROM outright_odds o3 WHERE o3.team_id=o.team_id AND o3.source=o.source)`,
     ).all<{ source: string; team_id: string; odds: number; name_zh: string }>();
 
@@ -277,12 +295,14 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
       if (r.source === "market") e.market = r.odds;
       else if (r.source === "tw") e.tw = r.odds;
     }
-    // 去水：用參考盤隱含機率正規化（總和→1）
     const rawSum = Object.values(byTeam).reduce((a, e) => a + (e.market ? 1 / e.market : 0), 0) || 1;
     const board = Object.entries(byTeam).map(([id, e]) => {
       const trueProb = e.market ? (1 / e.market) / rawSum : null;
       const ev = e.tw && trueProb ? trueProb * e.tw - 1 : null;
-      return { team_id: id, name: e.name, marketOdds: e.market ?? null, twOdds: e.tw ?? null, trueProb, ev };
+      // 名次變化：prevRank - currRank（>0 上升、<0 下降、0/無 持平）
+      const cr = currRanks[id], pr = prevRanks[id];
+      const rankChange = cr != null && pr != null ? pr - cr : 0;
+      return { team_id: id, name: e.name, marketOdds: e.market ?? null, twOdds: e.tw ?? null, trueProb, ev, rankChange };
     }).filter((x) => x.trueProb != null)
       .sort((a, b) => (b.trueProb ?? 0) - (a.trueProb ?? 0));
     const updatedAt = await env.CACHE.get("outright:lastSync");
