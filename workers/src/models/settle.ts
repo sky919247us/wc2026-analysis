@@ -16,29 +16,43 @@ interface FinishedMatch {
   kickoff_utc: string;
 }
 
-export async function settleMatches(env: Env): Promise<{ settled: number; eloUpdated: number }> {
-  // 已完賽、有比分、且還沒對帳的
+export async function settleMatches(env: Env): Promise<{ settled: number; eloUpdated: number; scores: number }> {
+  // 已完賽、有比分、且尚未結算（settled=0）的
   const { results: matches } = await env.DB.prepare(
-    `SELECT m.id, m.home_id, m.away_id, m.home_score, m.away_score, m.kickoff_utc
-     FROM matches m
-     LEFT JOIN track_record tr ON tr.match_id = m.id
-     WHERE m.status = 'FINISHED' AND m.home_score IS NOT NULL AND tr.match_id IS NULL`,
+    `SELECT id, home_id, away_id, home_score, away_score, kickoff_utc
+     FROM matches
+     WHERE status = 'FINISHED' AND home_score IS NOT NULL AND settled = 0`,
   ).all<FinishedMatch>();
 
-  let settled = 0, eloUpdated = 0;
+  let settled = 0, eloUpdated = 0, scores = 0;
 
   for (const m of matches ?? []) {
     const actual = m.home_score > m.away_score ? "home"
       : m.home_score < m.away_score ? "away" : "draw";
+    const actualScore = `${m.home_score}-${m.away_score}`;
 
-    // 開賽前最後一筆預測
+    // 開賽前最後一筆預測（含 detail_json 取 Poisson 比分）
     const pred = await env.DB.prepare(
-      `SELECT prob_home, prob_draw, prob_away FROM predictions
+      `SELECT prob_home, prob_draw, prob_away, detail_json FROM predictions
        WHERE match_id = ?1 AND created_at <= ?2
        ORDER BY created_at DESC LIMIT 1`,
-    ).bind(m.id, m.kickoff_utc).first<{ prob_home: number; prob_draw: number; prob_away: number }>();
+    ).bind(m.id, m.kickoff_utc).first<{ prob_home: number; prob_draw: number; prob_away: number; detail_json: string }>();
 
     if (pred) {
+      // 正確比數預測：Poisson 前 4 比分，任一命中即算中（獨立於賠率，所有有預測的場次都記）
+      try {
+        const detail = JSON.parse(pred.detail_json ?? "{}");
+        const top = (detail.poissonDetail?.topScores ?? []).map((s: any) => s.score).slice(0, 4);
+        if (top.length) {
+          const scoreHit = top.includes(actualScore) ? 1 : 0;
+          await env.DB.prepare(
+            `INSERT INTO score_record (match_id, predicted, actual, hit, settled_at)
+             VALUES (?1,?2,?3,?4,datetime('now')) ON CONFLICT(match_id) DO NOTHING`,
+          ).bind(m.id, top.join(","), actualScore, scoreHit).run();
+          scores++;
+        }
+      } catch { /* detail_json 解析失敗則略過比分對帳 */ }
+
       const probs = { home: pred.prob_home, draw: pred.prob_draw, away: pred.prob_away };
       const rec = (Object.keys(probs) as (keyof typeof probs)[])
         .reduce((a, b) => (probs[b] > probs[a] ? b : a));
@@ -72,10 +86,13 @@ export async function settleMatches(env: Env): Promise<{ settled: number; eloUpd
       ]);
       eloUpdated++;
     }
+
+    // 標記此場已結算（避免重複處理/重算 Elo）
+    await env.DB.prepare(`UPDATE matches SET settled = 1 WHERE id = ?1`).bind(m.id).run();
   }
 
   await env.CACHE.put("settle:lastRun", new Date().toISOString());
-  return { settled, eloUpdated };
+  return { settled, eloUpdated, scores };
 }
 
 /** 該選項的早盤（最早）與收盤（開賽前最後）賠率，來源優先 tw > pinnacle */

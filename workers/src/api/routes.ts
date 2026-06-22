@@ -233,11 +233,25 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
        ORDER BY m.kickoff_utc LIMIT 60`,
     ).all();
 
+    // 正確比數預測（獨立統計）：Poisson 前 4 比分任一命中
+    const scoreSum = await env.DB.prepare(
+      `SELECT COUNT(*) AS total, SUM(hit) AS hits FROM score_record`,
+    ).first<{ total: number; hits: number }>();
+    const scoreRecent = await env.DB.prepare(
+      `SELECT sr.predicted, sr.actual, sr.hit, h.name_zh AS home_zh, a.name_zh AS away_zh
+       FROM score_record sr
+       JOIN matches m ON m.id = sr.match_id
+       JOIN teams h ON h.id = m.home_id JOIN teams a ON a.id = m.away_id
+       ORDER BY sr.settled_at DESC LIMIT 40`,
+    ).all();
+    const sTotal = scoreSum?.total ?? 0, sHits = scoreSum?.hits ?? 0;
+
     const total = summary?.total ?? 0;
     const hits = summary?.hits ?? 0;
     const profit = summary?.profit ?? 0;
     return json({
       pending: pending.results,
+      score: { total: sTotal, hits: sHits, hitRate: sTotal ? +((sHits / sTotal) * 100).toFixed(1) : 0, recent: scoreRecent.results },
       total, hits,
       hitRate: total ? +((hits / total) * 100).toFixed(1) : 0,
       profitUnits: profit,
@@ -383,6 +397,31 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/admin/settle") {
       return json({ ok: true, ...(await settleMatches(env)) });
+    }
+    if (path === "/api/admin/backfill-scores") {
+      // 一次性：為既有完賽且有預測的場次補正確比數對帳（不動 Elo/track）
+      const { results: fin } = await env.DB.prepare(
+        `SELECT id, home_score, away_score, kickoff_utc FROM matches
+         WHERE status='FINISHED' AND home_score IS NOT NULL
+           AND id NOT IN (SELECT match_id FROM score_record)`,
+      ).all<{ id: string; home_score: number; away_score: number; kickoff_utc: string }>();
+      let n = 0;
+      for (const m of fin ?? []) {
+        const pred = await env.DB.prepare(
+          `SELECT detail_json FROM predictions WHERE match_id=?1 AND created_at<=?2 ORDER BY created_at DESC LIMIT 1`,
+        ).bind(m.id, m.kickoff_utc).first<{ detail_json: string }>();
+        if (!pred) continue;
+        try {
+          const top = (JSON.parse(pred.detail_json ?? "{}").poissonDetail?.topScores ?? []).map((s: any) => s.score).slice(0, 4);
+          if (!top.length) continue;
+          const actual = `${m.home_score}-${m.away_score}`;
+          await env.DB.prepare(
+            `INSERT INTO score_record (match_id, predicted, actual, hit, settled_at) VALUES (?1,?2,?3,?4,datetime('now')) ON CONFLICT(match_id) DO NOTHING`,
+          ).bind(m.id, top.join(","), actual, top.includes(actual) ? 1 : 0).run();
+          n++;
+        } catch { /* skip */ }
+      }
+      return json({ ok: true, backfilled: n });
     }
     if (path === "/api/admin/report") {
       const matchId = url.searchParams.get("match_id") ?? undefined;

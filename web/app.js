@@ -521,6 +521,23 @@ document.querySelectorAll(".nfilter").forEach((b) =>
 /* ---------- 戰績頁 ---------- */
 const selZh = (s) => ({ home: "主勝", draw: "平局", away: "客勝" }[s] || s);
 
+// 正確比數預測戰績（獨立區塊）
+function buildScoreBlock(t) {
+  const s = t.score;
+  if (!s || !s.total) return "";
+  const rows = (s.recent || []).map((r) => `<tr>
+    <td>${r.home_zh} ${r.actual} ${r.away_zh}</td>
+    <td class="muted">${r.predicted}</td>
+    <td class="${r.hit ? "tag-hit" : "tag-miss"}">${r.hit ? "✓ 中" : "✗ 未中"}</td>
+  </tr>`).join("");
+  return `<div class="card" style="margin-bottom:16px">
+    <h4 style="color:var(--accent2);margin-bottom:4px">🎯 正確比數預測（Poisson 前 4 比分任一命中）</h4>
+    <div style="font-size:1.4rem;font-weight:800;margin:6px 0">命中率 ${s.hitRate}% <span class="muted" style="font-size:.9rem">（${s.hits}/${s.total}）</span></div>
+    <table class="rec-table"><tr><th style="text-align:left">比賽（實際比分）</th><th>預測比分</th><th>結果</th></tr>${rows}</table>
+    <p class="muted" style="font-size:.8rem;margin-top:8px">正確比數是難度最高的玩法，命中率自然低於勝平負；此為模型比分預測的獨立準確度，與上方投注戰績分開計算。</p>
+  </div>`;
+}
+
 // 已預測、待開賽區塊（戰績頁共用）
 function buildPendingBlock(t) {
   if (!t.pending || !t.pending.length) return "";
@@ -541,7 +558,7 @@ async function loadTrack() {
   try {
     const t = await api("/api/track");
     if (!t.total) {
-      el.innerHTML = `${buildPendingBlock(t)}<div class="track-empty">
+      el.innerHTML = `${buildScoreBlock(t)}${buildPendingBlock(t)}<div class="track-empty">
         <h3>戰績累積中</h3>
         <p>上方為 AI 已預測、尚未開賽的場次。<br>
         比賽結束後會自動結算，於此公開累積命中率、報酬率與 CLV。</p>
@@ -582,6 +599,7 @@ async function loadTrack() {
           ${rows}
         </table>
       </div>
+      ${buildScoreBlock(t)}
       ${buildPendingBlock(t)}
       <p class="muted" style="font-size:.8rem;margin-top:14px">
         平準注：每場固定下注 1 注，命中得（賠率−1），未中失 1。只記錄有真實賠率的場次。僅供參考，不構成投注建議。
