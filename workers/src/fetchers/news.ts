@@ -42,9 +42,10 @@ export async function fetchNews(env: Env): Promise<{ inserted: number; feeds: nu
   for (const f of FEEDS) {
     try {
       const res = await fetch(f.url, {
-        headers: { "user-agent": "Mozilla/5.0 WC2026NewsBot" },
+        headers: { "user-agent": "Mozilla/5.0 WC2026NewsBot", "cache-control": "no-cache" },
+        cf: { cacheTtl: 0, cacheEverything: false },
         signal: AbortSignal.timeout(20_000),
-      });
+      } as RequestInit);
       if (!res.ok) continue;
       const items = parseRss(await res.text());
       if (!items.length) continue;
