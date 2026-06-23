@@ -13,7 +13,7 @@ import { handleIngest } from "./ingest";
 import { evForMarket } from "../models/ev";
 import { handicapProbs } from "../models/poisson";
 import { runPredictions } from "../models/predict";
-import { settleMatches } from "../models/settle";
+import { settleMatches, entryClosingOdds } from "../models/settle";
 import { buildParlays } from "../models/parlays";
 import { syncOutright } from "../fetchers/outright";
 import { generateReports } from "../llm/generate";
@@ -397,6 +397,35 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     }
     if (path === "/api/admin/settle") {
       return json({ ok: true, ...(await settleMatches(env)) });
+    }
+    if (path === "/api/admin/rebuild-track") {
+      // 用收盤賠率（優先 TW）重算整個投注戰績，不動 Elo/score
+      await env.DB.prepare(`DELETE FROM track_record`).run();
+      const { results: fin } = await env.DB.prepare(
+        `SELECT id, home_score, away_score, kickoff_utc FROM matches
+         WHERE status='FINISHED' AND home_score IS NOT NULL`,
+      ).all<{ id: string; home_score: number; away_score: number; kickoff_utc: string }>();
+      let n = 0;
+      for (const m of fin ?? []) {
+        const actual = m.home_score > m.away_score ? "home" : m.home_score < m.away_score ? "away" : "draw";
+        const pred = await env.DB.prepare(
+          `SELECT prob_home, prob_draw, prob_away FROM predictions WHERE match_id=?1 AND created_at<=?2 ORDER BY created_at DESC LIMIT 1`,
+        ).bind(m.id, m.kickoff_utc).first<{ prob_home: number; prob_draw: number; prob_away: number }>();
+        if (!pred) continue;
+        const probs = { home: pred.prob_home, draw: pred.prob_draw, away: pred.prob_away };
+        const rec = (Object.keys(probs) as (keyof typeof probs)[]).reduce((a, b) => (probs[b] > probs[a] ? b : a));
+        const { entry, closing } = await entryClosingOdds(env, m.id, rec, m.kickoff_utc);
+        if (!closing) continue;
+        const hit = rec === actual ? 1 : 0;
+        const profit = hit ? +(closing - 1).toFixed(2) : -1;
+        const clv = entry ? +((entry / closing - 1) * 100).toFixed(2) : null;
+        await env.DB.prepare(
+          `INSERT INTO track_record (match_id, recommended_market, recommended_odds, ev_at_recommend, hit, profit_units, closing_odds, clv, settled_at)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,datetime('now'))`,
+        ).bind(m.id, rec, closing, null, hit, profit, closing, clv).run();
+        n++;
+      }
+      return json({ ok: true, rebuilt: n });
     }
     if (path === "/api/admin/backfill-scores") {
       // 一次性：為既有完賽且有預測的場次補正確比數對帳（不動 Elo/track）
