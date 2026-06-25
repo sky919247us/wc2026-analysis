@@ -76,9 +76,9 @@ export default {
     if (minute === 0 && hour === 3 && env.ODDS_API_KEY)
       ctx.waitUntil(syncOutright(env).then(() => {}).catch((e) => console.error("outright", e)));
 
-    // 每日 UTC 07:00（台灣 15:00）：生成未來 24 小時賽事總覽（需 LLM key）
-    if (minute === 0 && hour === 7 && (env.GEMINI_API_KEY || env.OPENAI_API_KEY || env.ANTHROPIC_API_KEY))
-      ctx.waitUntil(generateDailySummary(env).then(() => {}).catch((e) => console.error("dailySummary", e)));
+    // 每日總覽：每小時檢查「今天是否已生成」，未生成且已過台灣 15:00 → 補生成（Gemini 暫掛也會自動重試）
+    if (minute === 0 && (env.GEMINI_API_KEY || env.OPENAI_API_KEY || env.ANTHROPIC_API_KEY))
+      ctx.waitUntil(ensureDailySummary(env).catch((e) => console.error("dailySummary", e)));
 
     // 每日 UTC 08:00（台灣 16:00）：推播今日 +EV 精選 + 最佳串關
     if (minute === 0 && hour === 8 && env.TELEGRAM_BOT_TOKEN)
@@ -117,6 +117,17 @@ async function runKickoffReminders(env: Env): Promise<void> {
     await broadcast(env, `⏰ <b>賽前提醒</b>\n\n⚽ ${m.home_zh} vs ${m.away_zh}　約 1 小時後開賽\n🔮 AI 看好：${pick}\n\n<i>僅供參考・理性投注</i>`);
     await env.CACHE.put(`remind:${m.id}`, "1", { expirationTtl: 21600 });
   }
+}
+
+/** 確保今天的總覽已生成（台灣 15:00 後檢查，未生成則補；失敗下一小時再試） */
+async function ensureDailySummary(env: Env): Promise<void> {
+  const nowTw = new Date(Date.now() + 8 * 3600_000);
+  const todayTw = nowTw.toISOString().slice(0, 10);
+  if (nowTw.getUTCHours() < 15) return; // 台灣 15:00 前不生成
+  const raw = await env.CACHE.get("daily:summary");
+  const cur = raw ? JSON.parse(raw) : null;
+  if (cur?.date === todayTw) return; // 今天已生成
+  await generateDailySummary(env);
 }
 
 /** 每日推播：今日 +EV 精選單注 + 最佳串關 */
