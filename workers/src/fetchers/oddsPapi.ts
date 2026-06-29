@@ -24,7 +24,7 @@ export async function syncOddsPapi(env: Env, hoursAhead = 36, maxFixtures = 12):
   // 只處理近期未開賽、且能對映到 fixture 的場次
   const { results: upcoming } = await env.DB.prepare(
     `SELECT id, home_id, away_id, kickoff_utc FROM matches
-     WHERE status != 'FINISHED'
+     WHERE status != 'FINISHED' AND home_id IS NOT NULL AND away_id IS NOT NULL
        AND kickoff_utc <= datetime('now', '+' || ?1 || ' hours')
        AND kickoff_utc >= datetime('now', '-2 hours')
      ORDER BY kickoff_utc LIMIT ?2`,

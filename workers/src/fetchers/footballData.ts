@@ -49,7 +49,11 @@ export async function syncMatches(env: Env): Promise<{ teams: number; matches: n
       if (side?.tla && !teams.has(side.tla))
         teams.set(side.tla, { name: side.name, grp: grp?.replace("GROUP_", "") ?? null });
     }
-    if (!m.homeTeam?.tla || !m.awayTeam?.tla) continue; // 淘汰賽對手未定
+    const homeTla = m.homeTeam?.tla ?? null;
+    const awayTla = m.awayTeam?.tla ?? null;
+    // 小組賽缺隊才跳過（理論上不會）；淘汰賽只要有一隊確定就存（保留對戰籤位，
+    // 未定的一邊存 null，待 football-data 補齊後由 ON CONFLICT 更新）→ 樹狀圖才看得到已晉級隊
+    if (grp ? (!homeTla || !awayTla) : (!homeTla && !awayTla)) continue;
     stmts.push(
       env.DB.prepare(
         `INSERT INTO matches (id, stage, kickoff_utc, home_id, away_id, status, home_score, away_score)
@@ -60,8 +64,8 @@ export async function syncMatches(env: Env): Promise<{ teams: number; matches: n
         String(m.id),
         grp ?? m.stage,
         m.utcDate,
-        m.homeTeam.tla,
-        m.awayTeam.tla,
+        homeTla,
+        awayTla,
         m.status === "FINISHED" ? "FINISHED" : m.status === "IN_PLAY" || m.status === "PAUSED" ? "LIVE" : "SCHEDULED",
         m.score?.fullTime?.home ?? null,
         m.score?.fullTime?.away ?? null,

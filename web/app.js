@@ -213,9 +213,10 @@ const BK_ROUNDS = [
   ["SEMI_FINALS", "4 強"], ["FINAL", "決賽"],
 ];
 function bkTeam(name, tla, score, win, played) {
+  const label = name ? `${flag(tla)} ${name}` : `<span class="muted">待定</span>`;
   return `<div class="bk-team ${win ? "winner" : ""}">
-    <span>${flag(tla)} ${name || "待定"}</span>
-    <span class="bk-score">${played ? (score ?? "-") : ""}</span>
+    <span>${label}</span>
+    <span class="bk-score">${played && name ? (score ?? "-") : ""}</span>
   </div>`;
 }
 function bkMatch(m) {

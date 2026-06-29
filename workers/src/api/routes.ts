@@ -91,14 +91,16 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
 
   // 淘汰賽對戰表：32強→16強→8強→4強→季軍戰→決賽（隨 syncMatches 自動長出）
   if (path === "/api/bracket") {
+    // LEFT JOIN：對手未定的一邊（home_zh/away_zh = null）也要回傳，前端顯示「待定」。
+    // 依 id 排序＝對戰籤位順序（football-data 淘汰賽 id 即籤位序）。
     const { results } = await env.DB.prepare(
       `SELECT m.id, m.stage, m.kickoff_utc, m.status, m.home_score, m.away_score,
               h.id AS home_id, h.name_zh AS home_zh, a.id AS away_id, a.name_zh AS away_zh
        FROM matches m
-       JOIN teams h ON h.id = m.home_id
-       JOIN teams a ON a.id = m.away_id
+       LEFT JOIN teams h ON h.id = m.home_id
+       LEFT JOIN teams a ON a.id = m.away_id
        WHERE m.stage IN ('LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','THIRD_PLACE','FINAL')
-       ORDER BY m.kickoff_utc`,
+       ORDER BY CAST(m.id AS INTEGER)`,
     ).all();
     return json({ matches: results });
   }

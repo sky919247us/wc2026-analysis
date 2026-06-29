@@ -58,7 +58,8 @@ export async function syncIntlOdds(env: Env): Promise<{ inserted: number; skippe
 
   // 把 odds-api 的隊名配對到我們的 match：同兩隊 + 開賽時間誤差 < 2 小時
   const { results: upcoming } = await env.DB.prepare(
-    `SELECT id, home_id, away_id, kickoff_utc FROM matches WHERE status != 'FINISHED'`,
+    `SELECT id, home_id, away_id, kickoff_utc FROM matches
+     WHERE status != 'FINISHED' AND home_id IS NOT NULL AND away_id IS NOT NULL`,
   ).all<{ id: string; home_id: string; away_id: string; kickoff_utc: string }>();
 
   const now = new Date().toISOString();
