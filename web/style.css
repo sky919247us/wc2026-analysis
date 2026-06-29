@@ -74,6 +74,44 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
   background: var(--panel); color: var(--text);
   border: 1px solid #ffffff20; border-radius: 12px; font-size: 1rem;
 }
+
+/* ---- 球員名單 ---- */
+.player-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+#player-search {
+  flex: 1; min-width: 200px; padding: 11px 14px;
+  background: var(--panel); color: var(--text);
+  border: 1px solid #ffffff20; border-radius: 10px; font-size: .95rem;
+}
+.player-select {
+  padding: 11px 12px; background: var(--panel); color: var(--text);
+  border: 1px solid #ffffff20; border-radius: 10px; font-size: .9rem; cursor: pointer;
+}
+.player-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(225px, 1fr)); gap: 10px; }
+.player-card { display: flex; align-items: center; gap: 11px; padding: 10px 12px; cursor: pointer; position: relative; }
+.player-card:hover { border-color: var(--accent); }
+.pl-avatar {
+  width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%;
+  background: var(--panel2); display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: .8rem; color: var(--accent2);
+}
+.pl-avatar.lg { width: 64px; height: 64px; flex-basis: 64px; font-size: 1.3rem; }
+.pl-body { min-width: 0; flex: 1; }
+.pl-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-en, .pl-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-en { font-size: .72rem; }
+.pl-meta { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+.pl-goals { position: absolute; top: 9px; right: 11px; font-size: .78rem; color: var(--gold); font-weight: 700; }
+.pl-detail-head { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.pl-detail-head h2 { margin: 0 0 2px; }
+.pl-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pl-stat { background: var(--panel2); border-radius: 10px; padding: 12px 8px; text-align: center; }
+.pl-stat .big { font-size: 1.05rem; font-weight: 700; }
+.pl-stat .lbl { font-size: .72rem; color: var(--muted); margin-top: 3px; }
+.pl-back { background: none; border: 1px solid #ffffff20; color: var(--muted); border-radius: 8px; padding: 5px 12px; cursor: pointer; margin-bottom: 14px; }
+.pl-back:hover { color: var(--text); border-color: var(--accent); }
+.squad-group { margin-top: 16px; }
+.squad-group .group-title { margin-bottom: 8px; }
+.team-card { cursor: pointer; }
 /* ---- 每日總覽 ---- */
 .daily-card { margin-bottom: 22px; border-left: 3px solid var(--accent); }
 .daily-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; }

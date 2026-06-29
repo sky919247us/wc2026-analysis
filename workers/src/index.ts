@@ -5,7 +5,7 @@
  */
 import type { Env } from "./env";
 import { handleApi } from "./api/routes";
-import { syncMatches, syncStandings } from "./fetchers/footballData";
+import { syncMatches, syncStandings, syncSquads } from "./fetchers/footballData";
 import { syncScorers } from "./fetchers/scorers";
 import { syncIntlOdds } from "./fetchers/oddsApi";
 import { syncOddsPapi } from "./fetchers/oddsPapi";
@@ -60,6 +60,10 @@ export default {
 
     // 每小時整點：賽程 + 積分榜同步，接著重算預測
     if (minute === 0) ctx.waitUntil(runFixtureSync(env).then(() => runPredictions(env)).then(() => {}));
+
+    // 每日 UTC 04:00：球員名單同步（squad 幾乎不變，一天一次足夠）
+    if (minute === 0 && hour === 4)
+      ctx.waitUntil(syncSquads(env).then((r) => console.log(`squads sync: ${r.players} players`)).catch((e) => console.error("squads", e)));
 
     // 每 20 分鐘：重算預測（吸收最新 Pinnacle 市場信號）
     if (minute % 20 === 0 && minute !== 0) ctx.waitUntil(runPredictions(env).then(() => {}));

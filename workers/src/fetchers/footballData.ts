@@ -134,6 +134,28 @@ export async function syncStandings(env: Env): Promise<number> {
   return groups.length;
 }
 
+/** 球員名單：一次呼叫 /competitions/WC/teams 拿 48 隊 squad（免費層即有） */
+export async function syncSquads(env: Env): Promise<{ teams: number; players: number }> {
+  const data = await fdFetch(env, "/competitions/WC/teams");
+  const stmts: D1PreparedStatement[] = [];
+  for (const t of data.teams ?? []) {
+    const teamId = t.tla ?? null; // 我們的 teams.id = tla
+    for (const p of t.squad ?? []) {
+      if (!p?.id) continue;
+      stmts.push(
+        env.DB.prepare(
+          `INSERT INTO players (id, team_id, name, position, dob, nationality)
+           VALUES (?1,?2,?3,?4,?5,?6)
+           ON CONFLICT(id) DO UPDATE SET team_id=?2, name=?3, position=?4, dob=?5, nationality=?6`,
+        ).bind(String(p.id), teamId, p.name ?? "", p.position ?? null, p.dateOfBirth ?? null, p.nationality ?? null),
+      );
+    }
+  }
+  for (const batch of chunk(stmts, 50)) await env.DB.batch(batch);
+  await env.CACHE.put("squads:lastSync", new Date().toISOString());
+  return { teams: (data.teams ?? []).length, players: stmts.length };
+}
+
 function chunk<T>(arr: T[], n: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));

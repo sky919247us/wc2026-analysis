@@ -21,6 +21,7 @@
       <button class="tab" data-tab="scorers">⚽ 進球王</button>
       <button class="tab" data-tab="standings">🥇 積分榜</button>
       <button class="tab" data-tab="news">📰 新聞</button>
+      <button class="tab" data-tab="players">🧑 球員</button>
       <button class="tab" data-tab="teams">🌍 球隊</button>
     </nav>
   </header>
@@ -99,8 +100,25 @@
       <div id="news-list" class="list"><p class="muted">載入中…</p></div>
     </section>
 
+    <section id="players" class="panel">
+      <div class="player-toolbar">
+        <input id="player-search" type="search" placeholder="搜尋球員名（中 / 英 / 隊伍）…" />
+        <select id="player-team" class="player-select"><option value="">全部隊伍</option></select>
+        <select id="player-pos" class="player-select">
+          <option value="">全部位置</option>
+          <option value="GK">守門員</option>
+          <option value="DF">後衛</option>
+          <option value="MF">中場</option>
+          <option value="FW">前鋒</option>
+        </select>
+        <span class="muted" id="player-count"></span>
+      </div>
+      <div id="player-grid" class="player-grid"><p class="muted">載入中…</p></div>
+    </section>
+
     <section id="teams" class="panel">
       <input id="team-search" type="search" placeholder="搜尋球隊（中文或英文）…" />
+      <p class="muted" style="margin:-6px 0 14px;font-size:.85rem">點球隊卡片看完整球員名單。</p>
       <div id="team-grid" class="grid"><p class="muted">載入中…</p></div>
     </section>
   </main>

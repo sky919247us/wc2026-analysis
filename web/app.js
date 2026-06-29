@@ -728,11 +728,119 @@ async function loadTrack() {
   }
 }
 
+/* ---------- 球員名單 ---------- */
+let allPlayers = [];
+const playerById = new Map();
+
+function plInitials(p) {
+  if (p.zh) return p.zh.slice(-2);
+  const parts = (p.name || "").split(/\s+/);
+  return ((parts[0]?.[0] || "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
+}
+function playerCard(p) {
+  const name = p.zh || p.name;
+  const en = p.zh ? p.name : "";
+  return `<div class="card player-card" data-pid="${p.id}">
+    <div class="pl-avatar">${plInitials(p)}</div>
+    <div class="pl-body">
+      <div class="pl-name">${name}</div>
+      ${en ? `<div class="muted pl-en">${en}</div>` : ""}
+      <div class="pl-meta">${flag(p.team_id)} ${p.team_zh || p.nationality || ""} · ${p.posZh || "-"} · ${p.age ?? "-"}歲</div>
+    </div>
+    ${p.goals ? `<span class="pl-goals">${p.goals}⚽</span>` : ""}
+  </div>`;
+}
+function bindPlayerCards(el, onClick) {
+  el.querySelectorAll(".player-card").forEach((c) =>
+    c.addEventListener("click", () => {
+      const p = playerById.get(c.dataset.pid);
+      if (p) (onClick || openPlayerDetail)(p);
+    }));
+}
+function renderPlayerGrid(list) {
+  const el = document.getElementById("player-grid");
+  if (!list.length) { el.innerHTML = '<p class="muted">沒有符合的球員</p>'; return; }
+  el.innerHTML = list.map(playerCard).join("");
+  bindPlayerCards(el);
+}
+function openPlayerDetail(p, backFn) {
+  overlay.hidden = false;
+  const body = document.getElementById("detail-body");
+  const stat = (v, l) => `<div class="pl-stat"><div class="big">${v}</div><div class="lbl">${l}</div></div>`;
+  body.innerHTML = `
+    ${backFn ? '<button class="pl-back" id="pl-back">← 返回名單</button>' : ""}
+    <div class="pl-detail-head">
+      <div class="pl-avatar lg">${plInitials(p)}</div>
+      <div>
+        <h2>${p.zh || p.name}</h2>
+        ${p.zh ? `<p class="muted">${p.name}</p>` : ""}
+        <p class="muted">${flag(p.team_id)} ${p.team_zh || ""} · ${p.posZh || "-"} · ${p.age ?? "-"}歲</p>
+      </div>
+    </div>
+    <div class="pl-stats">
+      ${stat(p.posZh || "-", "位置")}
+      ${stat(p.age ?? "-", "年齡")}
+      ${stat(p.goals || 0, "2026 進球")}
+      ${stat(p.dob || "-", "生日")}
+      ${stat(p.nationality || "-", "國籍")}
+      ${stat(p.team_zh || "-", "所屬隊")}
+    </div>
+    <p class="muted" style="font-size:.78rem;margin-top:14px">基本資料來自 football-data 免費層（陣容名單）。射門 / 傳球 / 過人等細部數據需付費資料源，暫不提供。</p>`;
+  if (backFn) document.getElementById("pl-back").addEventListener("click", backFn);
+}
+function openTeamSquad(teamId, teamZh) {
+  overlay.hidden = false;
+  const body = document.getElementById("detail-body");
+  const squad = allPlayers.filter((p) => p.team_id === teamId);
+  const order = [["GK", "守門員"], ["DF", "後衛"], ["MF", "中場"], ["FW", "前鋒"], ["", "其他"]];
+  body.innerHTML = `
+    <div class="pl-detail-head">
+      <div class="pl-avatar lg">${flag(teamId)}</div>
+      <div><h2>${teamZh}</h2><p class="muted">共 ${squad.length} 位球員</p></div>
+    </div>
+    ${order.map(([c, lbl]) => {
+      const list = squad.filter((p) => p.pos4 === c);
+      if (!list.length) return "";
+      return `<div class="squad-group"><div class="group-title">${lbl}（${list.length}）</div>
+        <div class="player-grid sq">${list.map(playerCard).join("")}</div></div>`;
+    }).join("")}`;
+  bindPlayerCards(body, (p) => openPlayerDetail(p, () => openTeamSquad(teamId, teamZh)));
+}
+function applyPlayerFilters() {
+  const q = document.getElementById("player-search").value.trim().toLowerCase();
+  const team = document.getElementById("player-team").value;
+  const pos = document.getElementById("player-pos").value;
+  let list = allPlayers;
+  if (team) list = list.filter((p) => p.team_zh === team);
+  if (pos) list = list.filter((p) => p.pos4 === pos);
+  if (q) list = list.filter((p) =>
+    (p.zh && p.zh.includes(q)) || p.name.toLowerCase().includes(q) || (p.team_zh && p.team_zh.includes(q)));
+  document.getElementById("player-count").textContent = `共 ${list.length} 位`;
+  renderPlayerGrid(list);
+}
+async function loadPlayers() {
+  try {
+    const d = await api("/api/players");
+    allPlayers = d.players || [];
+  } catch {
+    document.getElementById("player-grid").innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';
+    return;
+  }
+  playerById.clear();
+  for (const p of allPlayers) playerById.set(String(p.id), p);
+  const teams = [...new Set(allPlayers.map((p) => p.team_zh).filter(Boolean))].sort();
+  document.getElementById("player-team").innerHTML =
+    '<option value="">全部隊伍</option>' + teams.map((t) => `<option value="${t}">${t}</option>`).join("");
+  applyPlayerFilters();
+}
+["player-search", "player-team", "player-pos"].forEach((id) =>
+  document.getElementById(id).addEventListener("input", applyPlayerFilters));
+
 /* ---------- 球隊 ---------- */
 let allTeams = [];
 function renderTeams(teams) {
   const formHtml = (f) => f ? `<div class="form-row">${[...f].map((r) => `<span class="form-dot f-${r}">${r}</span>`).join("")}</div>` : "";
-  document.getElementById("team-grid").innerHTML = teams.map((t) => `<div class="card team-card">
+  document.getElementById("team-grid").innerHTML = teams.map((t) => `<div class="card team-card" data-team="${t.id}" data-teamzh="${t.name_zh}">
     <button class="fav-btn ${isFav(t.id) ? "on" : ""}" data-fav="${t.id}">${isFav(t.id) ? "★" : "☆"}</button>
     <div class="tla">${t.id}</div>
     <div class="zh">${t.name_zh}</div>
@@ -747,6 +855,8 @@ function renderTeams(teams) {
       b.classList.toggle("on");
       b.textContent = b.classList.contains("on") ? "★" : "☆";
     }));
+  document.querySelectorAll("#team-grid .team-card").forEach((c) =>
+    c.addEventListener("click", () => openTeamSquad(c.dataset.team, c.dataset.teamzh)));
 }
 async function loadTeams() {
   try {
@@ -776,6 +886,7 @@ loadMatches();
 loadStandings();
 loadScorers();
 loadBracket();
+loadPlayers();
 loadTeams();
 loadAnalysis();
 loadTrack();

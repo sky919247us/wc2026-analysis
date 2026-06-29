@@ -6,8 +6,10 @@
  *   GET /api/teams
  */
 import type { Env } from "../env";
-import { syncMatches, syncStandings } from "../fetchers/footballData";
+import { syncMatches, syncStandings, syncSquads } from "../fetchers/footballData";
 import { syncScorers } from "../fetchers/scorers";
+import { WC_PLAYER_NAMES_2026 } from "../data/wcPlayerNames2026";
+import { WC_SCORERS_HISTORY, normName } from "../data/wcScorersHistory";
 import { syncIntlOdds } from "../fetchers/oddsApi";
 import { syncOddsPapi } from "../fetchers/oddsPapi";
 import { handleIngest } from "./ingest";
@@ -111,6 +113,45 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     return cached
       ? new Response(cached, { headers: JSON_HEADERS })
       : json({ updatedAt: null, current2026: [], allTime: [] });
+  }
+
+  // 球員名單：48 隊全 squad + 中文名/位置/年齡/進球（給名單頁前端篩選）
+  if (path === "/api/players") {
+    const { results } = await env.DB.prepare(
+      `SELECT p.id, p.name, p.position, p.dob, p.nationality, p.team_id, t.name_zh AS team_zh
+       FROM players p LEFT JOIN teams t ON t.id = p.team_id
+       ORDER BY t.grp, t.name_zh, p.id`,
+    ).all<{ id: string; name: string; position: string | null; dob: string | null; nationality: string | null; team_id: string; team_zh: string }>();
+
+    // 中文名對照（球員 2026 表 + 歷史種子）
+    const zhMap = new Map<string, string>();
+    for (const [en, zh] of WC_PLAYER_NAMES_2026) zhMap.set(normName(en), zh);
+    for (const s of WC_SCORERS_HISTORY) if (!zhMap.has(normName(s.en))) zhMap.set(normName(s.en), s.zh);
+    // 2026 進球（從 scorers KV）：以英文全名（非種子者 en=全名）與中文名雙鍵比對
+    const goalsMap = new Map<string, number>();
+    try {
+      const raw = await env.CACHE.get("scorers");
+      if (raw) for (const r of (JSON.parse(raw).current2026 ?? []) as { zh: string; en: string; goals: number }[]) {
+        if (r.en) goalsMap.set(normName(r.en), r.goals);
+        if (r.zh) goalsMap.set(r.zh, r.goals);
+      }
+    } catch { /* ignore */ }
+
+    const now = Date.now();
+    const players = (results ?? []).map((p) => {
+      const n = normName(p.name);
+      const zh = zhMap.get(n) ?? "";
+      const pos4 = posCat(p.position);
+      const age = p.dob ? Math.floor((now - new Date(p.dob).getTime()) / 31557600000) : null;
+      const goals = goalsMap.get(n) ?? (zh ? goalsMap.get(zh) : undefined) ?? 0;
+      return {
+        id: p.id, name: p.name, zh,
+        pos: p.position, pos4, posZh: POS_ZH[pos4] ?? "",
+        age, dob: p.dob, nationality: p.nationality,
+        team_id: p.team_id, team_zh: p.team_zh, goals,
+      };
+    });
+    return json({ count: players.length, players });
   }
 
   if (path === "/api/teams") {
@@ -380,6 +421,9 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     if (path === "/api/admin/scorers-sync") {
       return json({ ok: true, ...(await syncScorers(env)) });
     }
+    if (path === "/api/admin/squads-sync") {
+      return json({ ok: true, ...(await syncSquads(env)) });
+    }
     if (path === "/api/admin/odds-sync") {
       return json(await syncIntlOdds(env));
     }
@@ -490,6 +534,17 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
 
   return json({ error: "not found" }, 404);
 }
+
+/** football-data 原始位置 → 四大分類碼（守門/後衛/中場/前鋒） */
+function posCat(p: string | null): "GK" | "DF" | "MF" | "FW" | "" {
+  const s = (p ?? "").toLowerCase();
+  if (s.includes("keeper")) return "GK";
+  if (s.includes("back") || s.includes("defen")) return "DF";
+  if (s.includes("midfield")) return "MF";
+  if (s.includes("forward") || s.includes("winger") || s.includes("offen") || s.includes("strik") || s.includes("attack")) return "FW";
+  return "";
+}
+const POS_ZH: Record<string, string> = { GK: "守門員", DF: "後衛", MF: "中場", FW: "前鋒", "": "" };
 
 /** 各隊近 5 場 W/D/L（由完賽比賽計算，最新在左） */
 async function teamForm(env: Env): Promise<Record<string, string>> {
