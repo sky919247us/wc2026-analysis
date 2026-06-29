@@ -7,6 +7,11 @@
  */
 import type { Env } from "../env";
 import { WC_SCORERS_HISTORY, normName, type HistScorer } from "../data/wcScorersHistory";
+import { WC_PLAYER_NAMES_2026 } from "../data/wcPlayerNames2026";
+
+/** 2026 當屆射手中文名（normName → 中文），補種子對不到的現役球員 */
+const ZH_2026 = new Map<string, string>(WC_PLAYER_NAMES_2026.map(([en, zh]) => [normName(en), zh]));
+const zhOf2026 = (fullName: string): string => ZH_2026.get(normName(fullName)) ?? "";
 
 const BASE = "https://api.football-data.org/v4";
 
@@ -139,7 +144,7 @@ export async function syncScorers(env: Env): Promise<{ current: number; allTime:
     const seed = matchSeed(idx, s.player?.name ?? "");
     const ts = s.team?.tla ? teamStatus.get(s.team.tla) : undefined;
     return {
-      zh: seed?.zh ?? "",
+      zh: seed?.zh ?? zhOf2026(s.player?.name ?? ""),
       en: seed?.enShort ?? s.player?.name ?? "",
       country: (s.team?.tla && zhByTla[s.team.tla]) || s.team?.name || "",
       goals: s.goals ?? 0,
@@ -176,7 +181,7 @@ export async function syncScorers(env: Env): Promise<{ current: number; allTime:
     if (seed && seedEnSet.has(seed.en)) continue; // 已疊加
     if (seed) continue;
     allTime.push({
-      zh: "",
+      zh: zhOf2026(s.player?.name ?? ""),
       en: s.player?.name ?? "",
       country: (s.team?.tla && zhByTla[s.team.tla]) || s.team?.name || "",
       goals: s.goals ?? 0,
