@@ -287,3 +287,9 @@ footer { padding: 20px; text-align: center; font-size: .85rem; color: var(--mute
 .bk-pending { padding: 14px; text-align: center; color: var(--muted); font-size: .85rem; }
 .bk-third { margin-top: 18px; max-width: 320px; }
 .scorer-table td.name .muted { font-weight: 400; font-size: .82rem; }
+.scorer-table tr.sc-out td { color: var(--muted); }
+.scorer-table tr.sc-out td.name b { color: var(--muted); font-weight: 600; }
+.out-tag {
+  display: inline-block; font-size: .72rem; padding: 1px 8px; border-radius: 999px;
+  background: #ffffff12; color: var(--muted); margin-left: 6px; white-space: nowrap;
+}

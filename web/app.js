@@ -169,11 +169,12 @@ function renderScorers(view) {
     ? "生涯世界盃總進球（歷屆加總，截至2022 + 2026即時）。顯示 6 球以上。"
     : "2026 世界盃當屆進球榜，隨比賽自動更新。";
   if (!rows?.length) { el.innerHTML = '<p class="muted">尚無資料</p>'; return; }
+  const isCur = view !== "alltime";
   el.innerHTML = `<div class="card"><table class="scorer-table">
     <tr><th></th><th style="text-align:left">球員</th><th style="text-align:left">國別</th><th>最近</th><th>進球</th></tr>
-    ${rows.map((r, i) => `<tr>
+    ${rows.map((r, i) => `<tr class="${isCur && r.eliminated ? "sc-out" : ""}">
       <td>${i + 1}</td>
-      <td class="name"><b>${r.zh || r.en}</b>${r.zh ? ` <span class="muted">${r.en}</span>` : ""}</td>
+      <td class="name"><b>${r.zh || r.en}</b>${r.zh ? ` <span class="muted">${r.en}</span>` : ""}${isCur && r.outLabel ? ` <span class="out-tag">${r.outLabel}</span>` : ""}</td>
       <td>${r.country}</td>
       <td>${r.last}</td>
       <td><b>${r.goals}</b></td>

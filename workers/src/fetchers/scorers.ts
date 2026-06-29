@@ -24,6 +24,63 @@ export interface ScorerRow {
   goals: number;
   matches?: number | null;
   last: number;      // 最後參賽年份
+  eliminated?: boolean; // 當屆：球隊已淘汰（球數定格）
+  outLabel?: string;    // 當屆：止步輪次，如「16強止步」「小組止步」
+}
+
+interface TeamStatus { alive: boolean; label: string }
+
+function stageRank(s: string): number {
+  if (s.startsWith("GROUP")) return 0;
+  return ({ LAST_32: 1, LAST_16: 2, QUARTER_FINALS: 3, SEMI_FINALS: 4, THIRD_PLACE: 4, FINAL: 5 } as Record<string, number>)[s] ?? 0;
+}
+const OUT_LABEL: Record<string, string> = {
+  GROUP: "小組止步", LAST_32: "32強止步", LAST_16: "16強止步",
+  QUARTER_FINALS: "8強止步", SEMI_FINALS: "4強止步",
+};
+
+interface MatchRow {
+  home_id: string; away_id: string; stage: string; status: string;
+  home_score: number | null; away_score: number | null;
+}
+
+/**
+ * 由 matches 推每隊存活/止步狀態：
+ *  有未完賽場次 → 還活著；否則看最深一輪結果。
+ *  小組賽止步無法只看比分判定（需晉級資訊）→ 用 standings 的晉級名單 qualSet 區分。
+ */
+function computeTeamStatus(ms: MatchRow[], qualSet: Set<string>): Map<string, TeamStatus> {
+  const perTeam = new Map<string, { hasUnfinished: boolean; deepest?: { rank: number; stage: string; won: boolean } }>();
+  const add = (tla: string, stage: string, status: string, won: boolean | null) => {
+    if (!tla) return;
+    let e = perTeam.get(tla);
+    if (!e) { e = { hasUnfinished: false }; perTeam.set(tla, e); }
+    if (status !== "FINISHED") { e.hasUnfinished = true; return; }
+    const rank = stageRank(stage);
+    if (!e.deepest || rank >= e.deepest.rank) e.deepest = { rank, stage, won: won === true };
+  };
+  for (const m of ms) {
+    const finished = m.status === "FINISHED" && m.home_score != null && m.away_score != null;
+    const homeWon = finished ? m.home_score! > m.away_score! : null;
+    const awayWon = finished ? m.away_score! > m.home_score! : null;
+    add(m.home_id, m.stage, m.status, homeWon);
+    add(m.away_id, m.stage, m.status, awayWon);
+  }
+  const out = new Map<string, TeamStatus>();
+  for (const [tla, e] of perTeam) {
+    if (e.hasUnfinished || !e.deepest) { out.set(tla, { alive: true, label: "" }); continue; }
+    const d = e.deepest;
+    if (d.stage === "FINAL") { out.set(tla, { alive: false, label: d.won ? "冠軍" : "亞軍" }); continue; }
+    if (d.stage === "THIRD_PLACE") { out.set(tla, { alive: false, label: d.won ? "季軍" : "殿軍" }); continue; }
+    if (d.stage.startsWith("GROUP")) {
+      // 小組賽全部打完：有在晉級名單 = 晉級中（下一輪賽程未建）；否則小組止步
+      out.set(tla, qualSet.has(tla) ? { alive: true, label: "" } : { alive: false, label: OUT_LABEL.GROUP });
+      continue;
+    }
+    // 淘汰賽：贏了最深一輪 = 晉級中（下一輪未建）；輸了 = 該輪止步
+    out.set(tla, d.won ? { alive: true, label: "" } : { alive: false, label: OUT_LABEL[d.stage] ?? "已淘汰" });
+  }
+  return out;
 }
 
 /** 種子英文全名 → 種子，含姓氏備援鍵 */
@@ -63,11 +120,24 @@ export async function syncScorers(env: Env): Promise<{ current: number; allTime:
   const zhByTla: Record<string, string> = {};
   for (const t of teamRows ?? []) zhByTla[t.id] = t.name_zh;
 
+  // 球隊存活/止步狀態：matches 推算 + standings 晉級名單輔助小組賽判定
+  const { results: matchRows } = await env.DB.prepare(
+    `SELECT home_id, away_id, stage, status, home_score, away_score FROM matches`,
+  ).all<MatchRow>();
+  const qualSet = new Set<string>();
+  try {
+    const stRaw = await env.CACHE.get("standings");
+    if (stRaw) for (const r of (JSON.parse(stRaw).ranking ?? []) as { tla: string; status: string }[])
+      if (r.status !== "out") qualSet.add(r.tla);
+  } catch { /* 無 standings 時小組止步以保守判定 */ }
+  const teamStatus = computeTeamStatus(matchRows ?? [], qualSet);
+
   const idx = buildSeedIndex();
 
   // 2026 當屆榜（≥1 球，球數降序）
   const current: ScorerRow[] = scorers.map((s) => {
     const seed = matchSeed(idx, s.player?.name ?? "");
+    const ts = s.team?.tla ? teamStatus.get(s.team.tla) : undefined;
     return {
       zh: seed?.zh ?? "",
       en: seed?.enShort ?? s.player?.name ?? "",
@@ -75,6 +145,8 @@ export async function syncScorers(env: Env): Promise<{ current: number; allTime:
       goals: s.goals ?? 0,
       matches: s.playedMatches ?? null,
       last: 2026,
+      eliminated: ts ? !ts.alive : false,
+      outLabel: ts?.label ?? "",
     };
   }).sort((a, b) => b.goals - a.goals);
 
