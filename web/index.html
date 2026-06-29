@@ -14,6 +14,8 @@
       <button class="tab active" data-tab="home">⭐ 推薦</button>
       <button class="tab" data-tab="matches">⚽ 比分盤</button>
       <button class="tab" data-tab="standings">🥇 積分榜</button>
+      <button class="tab" data-tab="scorers">⚽ 進球王</button>
+      <button class="tab" data-tab="bracket">🏟️ 淘汰賽</button>
       <button class="tab" data-tab="analysis">🔮 AI分析</button>
       <button class="tab" data-tab="parlays">🎯 串關</button>
       <button class="tab" data-tab="outright">👑 冠軍</button>
@@ -44,7 +46,25 @@
     </section>
 
     <section id="standings" class="panel">
+      <div id="rank-board"></div>
       <div id="standings-grid" class="grid"><p class="muted">載入中…</p></div>
+    </section>
+
+    <section id="scorers" class="panel">
+      <div class="toolbar">
+        <button class="sfilter active" data-sview="current">⚽ 2026 當屆</button>
+        <button class="sfilter" data-sview="alltime">🏆 歷史總榜</button>
+      </div>
+      <p class="muted" id="scorers-note"></p>
+      <div id="scorers-body"><p class="muted">載入中…</p></div>
+    </section>
+
+    <section id="bracket" class="panel">
+      <div class="hero-head">
+        <h2>🏟️ 淘汰賽對戰表</h2>
+        <p class="muted">32 強 → 16 強 → 8 強 → 4 強 → 決賽。比分與晉級隨比賽結束自動帶入（左右滑動查看完整對戰樹）。</p>
+      </div>
+      <div id="bracket-body"><p class="muted">載入中…</p></div>
     </section>
 
     <section id="analysis" class="panel">

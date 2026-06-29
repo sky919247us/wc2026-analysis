@@ -114,18 +114,41 @@ document.querySelectorAll(".filter").forEach((btn) => {
 });
 
 /* ---------- 積分榜 ---------- */
+function renderRankBoard(ranking) {
+  const el = document.getElementById("rank-board");
+  if (!el || !ranking?.length) { if (el) el.innerHTML = ""; return; }
+  // 依積分分群（高→低），同分隊列在一起；晉級白、淘汰淺灰
+  const tiers = [];
+  for (const r of ranking) {
+    let t = tiers[tiers.length - 1];
+    if (!t || t.points !== r.points) { t = { points: r.points, teams: [] }; tiers.push(t); }
+    t.teams.push(r);
+  }
+  el.innerHTML = `<div class="card rank-board">
+    <div class="group-title">📊 積分排行榜</div>
+    <p class="muted rank-legend"><span class="rank-team">晉級</span><span class="rank-team out">淘汰</span></p>
+    ${tiers.map((t) => `<div class="rank-tier">
+      <span class="rank-pts">${t.points} 分</span>
+      <span class="rank-teams">${t.teams.map((r) =>
+        `<span class="rank-team ${r.status === "out" ? "out" : ""}" title="${r.group} 組">${flag(r.tla)} ${r.name_zh}</span>`).join("")}</span>
+    </div>`).join("")}
+  </div>`;
+}
+
 async function loadStandings() {
   const el = document.getElementById("standings-grid");
   try {
     const data = await api("/api/standings");
     if (!data.groups?.length) { el.innerHTML = '<p class="muted">積分榜尚未同步</p>'; return; }
+    renderRankBoard(data.ranking);
     el.innerHTML = data.groups.map((g) => `<div class="card">
       <div class="group-title">${g.group} 組</div>
       <table>
-        <tr><th></th><th style="text-align:left">球隊</th><th>賽</th><th>勝</th><th>平</th><th>負</th><th>淨</th><th>分</th></tr>
+        <tr><th></th><th style="text-align:left">球隊</th><th>賽</th><th>勝</th><th>平</th><th>負</th><th>進</th><th>失</th><th>淨</th><th>分</th></tr>
         ${g.table.map((r) => `<tr class="${r.pos <= 2 ? "qualify" : ""}">
           <td>${r.pos}</td><td class="name">${flag(r.tla)} ${r.name_zh}</td>
           <td>${r.played}</td><td>${r.won}</td><td>${r.draw}</td><td>${r.lost}</td>
+          <td>${r.gf ?? "-"}</td><td>${r.ga ?? "-"}</td>
           <td>${r.gd > 0 ? "+" : ""}${r.gd}</td><td><b>${r.points}</b></td>
         </tr>`).join("")}
       </table>
@@ -133,6 +156,92 @@ async function loadStandings() {
   } catch {
     el.innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';
   }
+}
+
+/* ---------- 進球王（2026 當屆 / 歷史總榜） ---------- */
+let scorersData = null;
+function renderScorers(view) {
+  const el = document.getElementById("scorers-body");
+  const note = document.getElementById("scorers-note");
+  if (!scorersData) { el.innerHTML = '<p class="muted">進球王尚未同步</p>'; return; }
+  const rows = view === "alltime" ? scorersData.allTime : scorersData.current2026;
+  note.textContent = view === "alltime"
+    ? "生涯世界盃總進球（歷屆加總，截至2022 + 2026即時）。顯示 6 球以上。"
+    : "2026 世界盃當屆進球榜，隨比賽自動更新。";
+  if (!rows?.length) { el.innerHTML = '<p class="muted">尚無資料</p>'; return; }
+  el.innerHTML = `<div class="card"><table class="scorer-table">
+    <tr><th></th><th style="text-align:left">球員</th><th style="text-align:left">國別</th><th>最近</th><th>進球</th></tr>
+    ${rows.map((r, i) => `<tr>
+      <td>${i + 1}</td>
+      <td class="name"><b>${r.zh || r.en}</b>${r.zh ? ` <span class="muted">${r.en}</span>` : ""}</td>
+      <td>${r.country}</td>
+      <td>${r.last}</td>
+      <td><b>${r.goals}</b></td>
+    </tr>`).join("")}
+  </table></div>`;
+}
+async function loadScorers() {
+  try {
+    scorersData = await api("/api/scorers");
+  } catch {
+    document.getElementById("scorers-body").innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';
+    return;
+  }
+  const active = document.querySelector(".sfilter.active")?.dataset.sview || "current";
+  renderScorers(active);
+}
+document.querySelectorAll(".sfilter").forEach((b) => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".sfilter").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    renderScorers(b.dataset.sview);
+  });
+});
+
+/* ---------- 淘汰賽對戰表 ---------- */
+const BK_ROUNDS = [
+  ["LAST_32", "32 強"], ["LAST_16", "16 強"], ["QUARTER_FINALS", "8 強"],
+  ["SEMI_FINALS", "4 強"], ["FINAL", "決賽"],
+];
+function bkTeam(name, tla, score, win, played) {
+  return `<div class="bk-team ${win ? "winner" : ""}">
+    <span>${flag(tla)} ${name || "待定"}</span>
+    <span class="bk-score">${played ? (score ?? "-") : ""}</span>
+  </div>`;
+}
+function bkMatch(m) {
+  const played = m.status === "FINISHED" || m.status === "LIVE";
+  const fin = m.status === "FINISHED";
+  const hWin = fin && m.home_score > m.away_score;
+  const aWin = fin && m.away_score > m.home_score;
+  return `<div class="bk-match">
+    ${bkTeam(m.home_zh, m.home_id, m.home_score, hWin, played)}
+    ${bkTeam(m.away_zh, m.away_id, m.away_score, aWin, played)}
+  </div>`;
+}
+async function loadBracket() {
+  const el = document.getElementById("bracket-body");
+  let matches;
+  try {
+    matches = (await api("/api/bracket")).matches || [];
+  } catch {
+    el.innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';
+    return;
+  }
+  const byStage = {};
+  for (const m of matches) (byStage[m.stage] ??= []).push(m);
+  const cols = BK_ROUNDS.map(([stage, label]) => {
+    const list = byStage[stage] || [];
+    const body = list.length
+      ? list.map(bkMatch).join("")
+      : '<div class="bk-match bk-pending">待定</div>';
+    return `<div class="bk-round"><h3>${label}</h3>${body}</div>`;
+  }).join("");
+  const third = (byStage["THIRD_PLACE"] || [])[0];
+  const thirdHtml = third
+    ? `<div class="card bk-third"><div class="group-title">🥉 季軍戰</div>${bkMatch(third)}</div>`
+    : "";
+  el.innerHTML = `<div class="bracket">${cols}</div>${thirdHtml}`;
 }
 
 /* ---------- 首頁：最新 AI 推薦 ---------- */
@@ -655,6 +764,8 @@ loadDailySummary();
 loadHome();
 loadMatches();
 loadStandings();
+loadScorers();
+loadBracket();
 loadTeams();
 loadAnalysis();
 loadTrack();

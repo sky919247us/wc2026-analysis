@@ -96,10 +96,37 @@ export async function syncStandings(env: Env): Promise<number> {
         name_zh: ZH_NAMES[r.team?.tla] ?? r.team?.name,
         played: r.playedGames,
         won: r.won, draw: r.draw, lost: r.lost,
+        gf: r.goalsFor, ga: r.goalsAgainst,
         gd: r.goalDifference, points: r.points,
       })),
     }));
-  await env.CACHE.put("standings", JSON.stringify({ updatedAt: new Date().toISOString(), groups }));
+
+  // 晉級判定：各組前 2 直接晉級；12 個第 3 名按「分→淨→進→勝」取前 8
+  const direct = new Set<string>();
+  const thirds: any[] = [];
+  for (const g of groups) {
+    for (const r of g.table) {
+      if (!r.tla) continue;
+      if (r.pos <= 2) direct.add(r.tla);
+      else if (r.pos === 3) thirds.push(r);
+    }
+  }
+  thirds.sort((a, b) => b.points - a.points || b.gd - a.gd || (b.gf ?? 0) - (a.gf ?? 0) || b.won - a.won);
+  const thirdQ = new Set(thirds.slice(0, 8).map((t) => t.tla));
+  const statusOf = (tla: string): "direct" | "third" | "out" =>
+    direct.has(tla) ? "direct" : thirdQ.has(tla) ? "third" : "out";
+
+  // 攤平積分排名（分→淨→進），附晉級狀態給前端排行榜上色
+  const ranking = groups
+    .flatMap((g: any) => g.table.map((r: any) => ({ ...r, group: g.group })))
+    .filter((r: any) => r.tla)
+    .sort((a: any, b: any) => b.points - a.points || b.gd - a.gd || (b.gf ?? 0) - (a.gf ?? 0))
+    .map((r: any) => ({
+      tla: r.tla, name_zh: r.name_zh, group: r.group,
+      points: r.points, gd: r.gd, status: statusOf(r.tla),
+    }));
+
+  await env.CACHE.put("standings", JSON.stringify({ updatedAt: new Date().toISOString(), groups, ranking }));
   return groups.length;
 }
 

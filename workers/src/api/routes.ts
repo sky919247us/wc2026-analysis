@@ -7,6 +7,7 @@
  */
 import type { Env } from "../env";
 import { syncMatches, syncStandings } from "../fetchers/footballData";
+import { syncScorers } from "../fetchers/scorers";
 import { syncIntlOdds } from "../fetchers/oddsApi";
 import { syncOddsPapi } from "../fetchers/oddsPapi";
 import { handleIngest } from "./ingest";
@@ -86,6 +87,28 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     return cached
       ? new Response(cached, { headers: JSON_HEADERS })
       : json({ updatedAt: null, groups: [] });
+  }
+
+  // 淘汰賽對戰表：32強→16強→8強→4強→季軍戰→決賽（隨 syncMatches 自動長出）
+  if (path === "/api/bracket") {
+    const { results } = await env.DB.prepare(
+      `SELECT m.id, m.stage, m.kickoff_utc, m.status, m.home_score, m.away_score,
+              h.id AS home_id, h.name_zh AS home_zh, a.id AS away_id, a.name_zh AS away_zh
+       FROM matches m
+       JOIN teams h ON h.id = m.home_id
+       JOIN teams a ON a.id = m.away_id
+       WHERE m.stage IN ('LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','THIRD_PLACE','FINAL')
+       ORDER BY m.kickoff_utc`,
+    ).all();
+    return json({ matches: results });
+  }
+
+  // 進球王：2026 當屆榜 + 歷史生涯總榜（整包 KV）
+  if (path === "/api/scorers") {
+    const cached = await env.CACHE.get("scorers");
+    return cached
+      ? new Response(cached, { headers: JSON_HEADERS })
+      : json({ updatedAt: null, current2026: [], allTime: [] });
   }
 
   if (path === "/api/teams") {
@@ -351,6 +374,9 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
       const r = await syncMatches(env);
       const g = await syncStandings(env);
       return json({ ok: true, ...r, groups: g });
+    }
+    if (path === "/api/admin/scorers-sync") {
+      return json({ ok: true, ...(await syncScorers(env)) });
     }
     if (path === "/api/admin/odds-sync") {
       return json(await syncIntlOdds(env));

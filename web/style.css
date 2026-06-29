@@ -27,12 +27,12 @@ header {
 }
 .brand { font-weight: 700; font-size: 1.2rem; color: var(--accent); }
 nav { display: flex; gap: 8px; flex-wrap: wrap; }
-.tab, .filter {
+.tab, .filter, .sfilter {
   background: transparent; color: var(--muted); border: 1px solid transparent;
   padding: 8px 14px; border-radius: 999px; cursor: pointer; font-size: .95rem;
 }
-.tab.active, .filter.active { background: var(--accent); color: #fff; }
-.tab:hover, .filter:hover { border-color: var(--accent); color: var(--text); }
+.tab.active, .filter.active, .sfilter.active { background: var(--accent); color: #fff; }
+.tab:hover, .filter:hover, .sfilter:hover { border-color: var(--accent); color: var(--text); }
 main { flex: 1; width: min(1100px, 100%); margin: 0 auto; padding: 24px 16px; }
 .panel { display: none; }
 .panel.active { display: block; }
@@ -252,4 +252,38 @@ footer { padding: 20px; text-align: center; font-size: .85rem; color: var(--mute
 
   /* Poisson 比分格：2 欄較不擁擠 */
   .score-grid { grid-template-columns: repeat(2, 1fr); }
+
+  .bk-round { min-width: 150px; }
 }
+
+/* ---------- 積分排行榜 ---------- */
+.rank-board { margin-bottom: 16px; }
+.rank-legend { display: flex; gap: 8px; margin: 4px 0 12px; }
+.rank-tier { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ffffff10; }
+.rank-tier:last-child { border-bottom: none; }
+.rank-pts { flex: 0 0 52px; color: var(--gold); font-weight: 700; padding-top: 4px; }
+.rank-teams { display: flex; flex-wrap: wrap; gap: 6px; }
+.rank-team {
+  display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .85rem;
+  background: var(--panel2); color: var(--text); border: 1px solid #ffffff14;
+}
+.rank-team.out { color: var(--muted); background: transparent; opacity: .7; }
+
+/* ---------- 淘汰賽對戰樹 ---------- */
+.bracket { display: flex; gap: 18px; overflow-x: auto; padding-bottom: 10px; align-items: stretch; }
+.bk-round { min-width: 190px; display: flex; flex-direction: column; justify-content: space-around; gap: 12px; }
+.bk-round h3 { text-align: center; color: var(--accent2); font-size: .95rem; margin-bottom: 4px; }
+.bk-match {
+  background: var(--panel); border: 1px solid #ffffff12; border-radius: 10px; overflow: hidden;
+}
+.bk-team {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 7px 10px; font-size: .9rem;
+}
+.bk-team + .bk-team { border-top: 1px solid #ffffff10; }
+.bk-team.winner { color: var(--gold); font-weight: 700; background: #fbbf2410; }
+.bk-score { color: var(--muted); font-variant-numeric: tabular-nums; }
+.bk-team.winner .bk-score { color: var(--gold); }
+.bk-pending { padding: 14px; text-align: center; color: var(--muted); font-size: .85rem; }
+.bk-third { margin-top: 18px; max-width: 320px; }
+.scorer-table td.name .muted { font-weight: 400; font-size: .82rem; }

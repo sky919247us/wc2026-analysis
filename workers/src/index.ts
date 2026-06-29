@@ -6,6 +6,7 @@
 import type { Env } from "./env";
 import { handleApi } from "./api/routes";
 import { syncMatches, syncStandings } from "./fetchers/footballData";
+import { syncScorers } from "./fetchers/scorers";
 import { syncIntlOdds } from "./fetchers/oddsApi";
 import { syncOddsPapi } from "./fetchers/oddsPapi";
 import { runPredictions } from "./models/predict";
@@ -223,5 +224,12 @@ async function runFixtureSync(env: Env): Promise<void> {
     console.log(`fixture sync ok: ${r.teams} teams, ${r.matches} matches, ${g} groups`);
   } catch (e) {
     console.error("fixture sync failed", e);
+  }
+  // 進球王（當屆 + 歷史總榜）：與賽程同步，獨立 try 不影響上面
+  try {
+    const s = await syncScorers(env);
+    console.log(`scorers sync ok: ${s.current} current, ${s.allTime} all-time`);
+  } catch (e) {
+    console.error("scorers sync failed", e);
   }
 }
