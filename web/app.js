@@ -114,6 +114,11 @@ document.querySelectorAll(".filter").forEach((btn) => {
 });
 
 /* ---------- 積分榜 ---------- */
+// 小組賽 3 場的積分組成對照（積分 = 3×勝 + 1×和）
+const PTS_DESC = {
+  9: "3戰全勝", 7: "2勝1和", 6: "2勝", 5: "1勝2和",
+  4: "1勝1和", 3: "1勝 或 3和", 2: "2和", 1: "1和", 0: "全敗",
+};
 function renderRankBoard(ranking) {
   const el = document.getElementById("rank-board");
   if (!el || !ranking?.length) { if (el) el.innerHTML = ""; return; }
@@ -128,7 +133,10 @@ function renderRankBoard(ranking) {
     <div class="group-title">📊 積分排行榜</div>
     <p class="muted rank-legend"><span class="rank-team">晉級</span><span class="rank-team out">淘汰</span></p>
     ${tiers.map((t) => `<div class="rank-tier">
-      <span class="rank-pts">${t.points} 分</span>
+      <span class="rank-pts">
+        <span class="rank-pts-n">${t.points} 分</span>
+        ${PTS_DESC[t.points] ? `<span class="rank-pts-d">${PTS_DESC[t.points]}</span>` : ""}
+      </span>
       <span class="rank-teams">${t.teams.map((r) =>
         `<span class="rank-team ${r.status === "out" ? "out" : ""}" title="${r.group} 組">${flag(r.tla)} ${r.name_zh}</span>`).join("")}</span>
     </div>`).join("")}

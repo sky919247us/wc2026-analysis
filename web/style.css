@@ -261,7 +261,9 @@ footer { padding: 20px; text-align: center; font-size: .85rem; color: var(--mute
 .rank-legend { display: flex; gap: 8px; margin: 4px 0 12px; }
 .rank-tier { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; border-bottom: 1px solid #ffffff10; }
 .rank-tier:last-child { border-bottom: none; }
-.rank-pts { flex: 0 0 52px; color: var(--gold); font-weight: 700; padding-top: 4px; }
+.rank-pts { flex: 0 0 84px; display: flex; flex-direction: column; gap: 1px; padding-top: 2px; }
+.rank-pts-n { color: var(--gold); font-weight: 700; }
+.rank-pts-d { color: var(--muted); font-size: .72rem; }
 .rank-teams { display: flex; flex-wrap: wrap; gap: 6px; }
 .rank-team {
   display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: .85rem;
