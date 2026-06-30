@@ -54,13 +54,13 @@ export async function syncMatches(env: Env): Promise<{ teams: number; matches: n
     // 小組賽缺隊才跳過（理論上不會）；淘汰賽只要有一隊確定就存（保留對戰籤位，
     // 未定的一邊存 null，待 football-data 補齊後由 ON CONFLICT 更新）→ 樹狀圖才看得到已晉級隊
     if (grp ? (!homeTla || !awayTla) : (!homeTla && !awayTla)) continue;
-    const { hs, as, hp, ap } = parseScore(m.score);
+    const { hs, as, hp, ap, winner } = parseScore(m.score);
     stmts.push(
       env.DB.prepare(
-        `INSERT INTO matches (id, stage, kickoff_utc, home_id, away_id, status, home_score, away_score, home_pens, away_pens)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
+        `INSERT INTO matches (id, stage, kickoff_utc, home_id, away_id, status, home_score, away_score, home_pens, away_pens, winner)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
          ON CONFLICT(id) DO UPDATE SET
-           stage=?2, kickoff_utc=?3, home_id=?4, away_id=?5, status=?6, home_score=?7, away_score=?8, home_pens=?9, away_pens=?10`,
+           stage=?2, kickoff_utc=?3, home_id=?4, away_id=?5, status=?6, home_score=?7, away_score=?8, home_pens=?9, away_pens=?10, winner=?11`,
       ).bind(
         String(m.id),
         grp ?? m.stage,
@@ -68,7 +68,7 @@ export async function syncMatches(env: Env): Promise<{ teams: number; matches: n
         homeTla,
         awayTla,
         m.status === "FINISHED" ? "FINISHED" : m.status === "IN_PLAY" || m.status === "PAUSED" ? "LIVE" : "SCHEDULED",
-        hs, as, hp, ap,
+        hs, as, hp, ap, winner,
       ),
     );
   }
@@ -140,18 +140,20 @@ export async function syncStandings(env: Env): Promise<number> {
  *   PK 大戰時另存 home_pens/away_pens（取 penalties 或 fullTime 中「有勝負」的來源，
  *   因模擬資料的 penalties 欄偶為平手壞值）。
  */
-function parseScore(sc: any): { hs: number | null; as: number | null; hp: number | null; ap: number | null } {
-  if (!sc) return { hs: null, as: null, hp: null, ap: null };
+function parseScore(sc: any): { hs: number | null; as: number | null; hp: number | null; ap: number | null; winner: string | null } {
+  if (!sc) return { hs: null, as: null, hp: null, ap: null, winner: null };
+  const winner = sc.winner === "HOME_TEAM" ? "HOME" : sc.winner === "AWAY_TEAM" ? "AWAY" : sc.winner === "DRAW" ? "DRAW" : null;
   if (sc.duration === "PENALTY_SHOOTOUT") {
     const rt = sc.regularTime ?? sc.fullTime ?? {};
     const et = sc.extraTime ?? {};
     const hs = rt.home != null ? rt.home + (et.home ?? 0) : null;
     const as = rt.away != null ? rt.away + (et.away ?? 0) : null;
-    const pen = [sc.penalties, sc.fullTime].find((p: any) => p && p.home !== p.away) ?? sc.penalties ?? sc.fullTime ?? {};
-    return { hs, as, hp: pen.home ?? null, ap: pen.away ?? null };
+    // PK 真實比分＝penalties 欄（fullTime 是「正賽+PK」加總，非 PK 比分）
+    const pen = sc.penalties ?? {};
+    return { hs, as, hp: pen.home ?? null, ap: pen.away ?? null, winner };
   }
   // REGULAR / EXTRA_TIME：fullTime 已含延長賽
-  return { hs: sc.fullTime?.home ?? null, as: sc.fullTime?.away ?? null, hp: null, ap: null };
+  return { hs: sc.fullTime?.home ?? null, as: sc.fullTime?.away ?? null, hp: null, ap: null, winner };
 }
 
 /** 球員名單：一次呼叫 /competitions/WC/teams 拿 48 隊 squad（免費層即有） */

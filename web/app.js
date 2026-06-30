@@ -229,8 +229,8 @@ function bkMatch(m) {
   const played = m.status === "FINISHED" || m.status === "LIVE";
   const fin = m.status === "FINISHED";
   const tie = m.home_score === m.away_score;
-  const hWin = fin && (m.home_score > m.away_score || (tie && m.home_pens > m.away_pens));
-  const aWin = fin && (m.away_score > m.home_score || (tie && m.away_pens > m.home_pens));
+  const hWin = fin && (m.winner === "HOME" || (!m.winner && (m.home_score > m.away_score || (tie && m.home_pens > m.away_pens))));
+  const aWin = fin && (m.winner === "AWAY" || (!m.winner && (m.away_score > m.home_score || (tie && m.away_pens > m.home_pens))));
   return `<div class="bk-match">
     ${bkTeam(m.home_zh, m.home_id, m.home_score, m.home_pens, hWin, played)}
     ${bkTeam(m.away_zh, m.away_id, m.away_score, m.away_pens, aWin, played)}
