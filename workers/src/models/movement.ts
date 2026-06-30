@@ -42,10 +42,18 @@ export async function detectMovement(env: Env, source: string, matchIds: string[
       return a && b ? (a - b) / a : 0;
     };
 
+    // 隊名（把 home/draw/away 換成口語的「○○贏 / 和局」）
+    const teams = await env.DB.prepare(
+      `SELECT h.name_zh AS home_zh, a.name_zh AS away_zh FROM matches m
+       JOIN teams h ON h.id = m.home_id JOIN teams a ON a.id = m.away_id WHERE m.id = ?1`,
+    ).bind(matchId).first<{ home_zh: string; away_zh: string }>();
+    const oc = (sel: string): string =>
+      sel === "home" ? `${teams?.home_zh ?? "主隊"}贏` : sel === "away" ? `${teams?.away_zh ?? "客隊"}贏` : "和局";
+
     // 規則 1：雙向賠率同降（主勝與客勝同時下降）→ 疑似大額資金介入
     if (drop("home") > DROP_PCT && drop("away") > DROP_PCT) {
-      await pushAlert(env, matchId, "both_drop",
-        `雙向賠率同降（主 -${(drop("home") * 100).toFixed(1)}%、客 -${(drop("away") * 100).toFixed(1)}%），疑似大額資金介入`,
+      await pushAlert(env, matchId, "both_drop", teams,
+        `「${oc("home")}」和「${oc("away")}」的賠率同時變低——兩邊都有大錢押注，通常代表有大戶／大額資金進場推動盤口。`,
         Math.min(99, Math.round((drop("home") + drop("away")) * 500)));
       alerts++;
       continue;
@@ -53,8 +61,8 @@ export async function detectMovement(env: Env, source: string, matchIds: string[
     // 規則 2：單邊急降 >6% → 資金湧入一側
     for (const sel of ["home", "draw", "away"]) {
       if (drop(sel) > DROP_PCT * 2) {
-        await pushAlert(env, matchId, "sharp_drop",
-          `${sel} 賠率急降 ${(drop(sel) * 100).toFixed(1)}%，大量資金湧入`,
+        await pushAlert(env, matchId, "sharp_drop", teams,
+          `「${oc(sel)}」的賠率短時間內大幅變低（${(drop(sel) * 100).toFixed(0)}%）——代表很多錢押這一邊，莊家調低賠率，市場越來越看好這個結果。`,
           Math.min(99, Math.round(drop(sel) * 800)));
         alerts++;
       }
@@ -63,19 +71,16 @@ export async function detectMovement(env: Env, source: string, matchIds: string[
   return alerts;
 }
 
-async function pushAlert(env: Env, matchId: string, rule: string, detail: string, severity: number) {
+async function pushAlert(
+  env: Env, matchId: string, rule: string,
+  teams: { home_zh: string; away_zh: string } | null, detail: string, severity: number,
+) {
   await env.DB.prepare(
     `INSERT INTO odds_alerts (match_id, rule, detail, severity) VALUES (?1, ?2, ?3, ?4)`,
   ).bind(matchId, rule, detail, severity).run();
 
   // Telegram 推播（設了 TELEGRAM_BOT_TOKEN 且有訂閱者才送），只推較顯著的（≥35）
-  if (env.TELEGRAM_BOT_TOKEN && severity >= 35) {
-    const teams = await env.DB.prepare(
-      `SELECT h.name_zh AS home_zh, a.name_zh AS away_zh FROM matches m
-       JOIN teams h ON h.id = m.home_id JOIN teams a ON a.id = m.away_id WHERE m.id = ?1`,
-    ).bind(matchId).first<{ home_zh: string; away_zh: string }>();
-    if (teams) {
-      try { await broadcast(env, formatAlert({ ...teams, detail, severity })); } catch { /* 推播失敗不影響偵測 */ }
-    }
+  if (env.TELEGRAM_BOT_TOKEN && severity >= 35 && teams) {
+    try { await broadcast(env, formatAlert({ ...teams, detail, severity })); } catch { /* 推播失敗不影響偵測 */ }
   }
 }

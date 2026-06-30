@@ -60,8 +60,16 @@ export async function handleWebhook(env: Env, update: any): Promise<void> {
   }
 }
 
-/** 把一筆 odds_alert 格式化成推播訊息 */
+/** 把一筆 odds_alert 格式化成推播訊息（口語化說明 + 可能原因） */
 export function formatAlert(a: { home_zh: string; away_zh: string; detail: string; severity: number }): string {
   const dot = a.severity >= 60 ? "🔴" : a.severity >= 35 ? "🟡" : "🟢";
-  return `${dot} <b>盤口異動警報</b>\n\n⚽ ${a.home_zh} vs ${a.away_zh}\n📊 ${a.detail}\n異動分數：${a.severity}\n\n<i>僅供參考・理性投注</i>`;
+  const strength = a.severity >= 60 ? "很大" : a.severity >= 35 ? "中等" : "輕微";
+  return (
+    `${dot} <b>賠率出現明顯變動</b>\n\n` +
+    `⚽ ${a.home_zh} vs ${a.away_zh}\n` +
+    `${a.detail}\n` +
+    `📈 變動強度：${strength}（${a.severity}/99）\n\n` +
+    `💡 <b>可能原因</b>：球隊有新消息（傷停、先發名單、輪換）、職業玩家（俗稱「聰明錢」）進場下注，或輿論一面倒押同一邊。\n` +
+    `<i>賠率變低代表「市場更看好」，但不保證結果。僅供參考・未滿18歲不得購買・理性投注。</i>`
+  );
 }
