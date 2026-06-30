@@ -231,19 +231,29 @@ function bkMatch(m) {
 }
 async function loadBracket() {
   const el = document.getElementById("bracket-body");
-  let matches;
+  let data;
   try {
-    matches = (await api("/api/bracket")).matches || [];
+    data = await api("/api/bracket");
   } catch {
     el.innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';
     return;
   }
+  const matches = data.matches || [];
+  const advanced = data.advanced || {};
   const byStage = {};
   for (const m of matches) (byStage[m.stage] ??= []).push(m);
   const cols = BK_ROUNDS.map(([stage, label]) => {
     const list = byStage[stage] || [];
-    const body = list.length
-      ? list.map(bkMatch).join("")
+    // 雙方都確定才畫對戰卡；否則勝隊以「已晉級」晶片呈現（football-data 配對不可靠時的後備）
+    const full = list.filter((m) => m.home_id && m.away_id);
+    const shown = new Set();
+    full.forEach((m) => { shown.add(m.home_id); shown.add(m.away_id); });
+    const cards = full.map(bkMatch).join("");
+    const chips = (advanced[stage] || [])
+      .filter((t) => !shown.has(t.tla))
+      .map((t) => `<div class="bk-chip">${flag(t.tla)} ${t.zh} <span class="bk-chip-tag">已晉級</span></div>`).join("");
+    const body = (cards || chips)
+      ? `${cards}${chips ? `<div class="bk-chips">${chips}</div>` : ""}`
       : '<div class="bk-match bk-pending">待定</div>';
     return `<div class="bk-round"><h3>${label}</h3>${body}</div>`;
   }).join("");

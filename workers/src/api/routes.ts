@@ -103,8 +103,24 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
        LEFT JOIN teams a ON a.id = m.away_id
        WHERE m.stage IN ('LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','THIRD_PLACE','FINAL')
        ORDER BY CAST(m.id AS INTEGER)`,
-    ).all();
-    return json({ matches: results });
+    ).all<{ id: string; stage: string; status: string; home_score: number | null; away_score: number | null; home_id: string | null; home_zh: string | null; away_id: string | null; away_zh: string | null }>();
+
+    // football-data 對「晉級下一輪」的指派不可靠（免費層常只填部分）→ 自己從各輪勝隊推算
+    // 晉級名單，確保 16強/8強… 名單即時反映實際賽果。
+    const FLOW = ["LAST_32", "LAST_16", "QUARTER_FINALS", "SEMI_FINALS", "FINAL"];
+    const advanced: Record<string, { tla: string; zh: string }[]> = {};
+    for (const m of results ?? []) {
+      if (m.status !== "FINISHED" || m.home_score == null || m.away_score == null || m.home_score === m.away_score) continue;
+      const win = m.home_score > m.away_score
+        ? { tla: m.home_id, zh: m.home_zh }
+        : { tla: m.away_id, zh: m.away_zh };
+      if (!win.tla) continue;
+      const i = FLOW.indexOf(m.stage);
+      if (i < 0 || i >= FLOW.length - 1) continue;
+      const next = FLOW[i + 1];
+      (advanced[next] ??= []).push({ tla: win.tla, zh: win.zh ?? win.tla });
+    }
+    return json({ matches: results, advanced });
   }
 
   // 進球王：2026 當屆榜 + 歷史生涯總榜（整包 KV）

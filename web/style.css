@@ -325,6 +325,12 @@ footer { padding: 20px; text-align: center; font-size: .85rem; color: var(--mute
 .bk-score { color: var(--muted); font-variant-numeric: tabular-nums; }
 .bk-team.winner .bk-score { color: var(--gold); }
 .bk-pending { padding: 14px; text-align: center; color: var(--muted); font-size: .85rem; }
+.bk-chips { display: flex; flex-direction: column; gap: 8px; }
+.bk-chip {
+  display: flex; align-items: center; gap: 6px; padding: 8px 10px; font-size: .9rem;
+  background: var(--panel); border: 1px solid var(--win); border-radius: 10px;
+}
+.bk-chip-tag { margin-left: auto; font-size: .68rem; color: var(--win); }
 .bk-third { margin-top: 18px; max-width: 320px; }
 .scorer-table td.name .muted { font-weight: 400; font-size: .82rem; }
 .scorer-table tr.sc-out td { color: var(--muted); }
