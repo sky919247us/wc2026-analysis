@@ -14,7 +14,17 @@ interface Leg {
 
 interface Row { match_id: string; source: string; market: string; line: number | null; selection: string; odds: number; captured_at: string }
 
-const SEL_ZH: Record<string, string> = { home: "主勝", draw: "和局", away: "客勝", over: "大 2.5", under: "小 2.5" };
+/** 玩法中文：1x2 直接用隊名（如「阿根廷 勝」），比「主勝/客勝」直覺 */
+function pickZh(sel: string, home: string, away: string): string {
+  switch (sel) {
+    case "home": return `${home} 勝`;
+    case "away": return `${away} 勝`;
+    case "draw": return "和局";
+    case "over": return "大 2.5 球";
+    case "under": return "小 2.5 球";
+    default: return sel;
+  }
+}
 
 /** 取每場最新的 tw / pinnacle 1x2 + 大小球，算出每場「最佳 +EV 單注」 */
 export async function bestLegs(env: Env, minEv = 0): Promise<Leg[]> {
@@ -52,14 +62,14 @@ export async function bestLegs(env: Env, minEv = 0): Promise<Leg[]> {
     if (tw["1x2"] && pin["1x2"]?.home && pin["1x2"]?.draw && pin["1x2"]?.away) {
       const probs = removeMargin([pin["1x2"].home, pin["1x2"].draw, pin["1x2"].away]);
       (["home", "draw", "away"] as const).forEach((sel, i) => {
-        if (tw["1x2"][sel]) cands.push({ matchId, label, pick: SEL_ZH[sel], twOdds: tw["1x2"][sel], trueProb: probs[i], ev: probs[i] * tw["1x2"][sel] - 1, kickoff: mm.kickoff });
+        if (tw["1x2"][sel]) cands.push({ matchId, label, pick: pickZh(sel, mm.home_zh, mm.away_zh), twOdds: tw["1x2"][sel], trueProb: probs[i], ev: probs[i] * tw["1x2"][sel] - 1, kickoff: mm.kickoff });
       });
     }
     // 大小球 2.5
     if (tw.total?.over && tw.total?.under && pin.total?.over && pin.total?.under) {
       const probs = removeMargin([pin.total.over, pin.total.under]);
       (["over", "under"] as const).forEach((sel, i) => {
-        if (tw.total[sel]) cands.push({ matchId, label, pick: SEL_ZH[sel], twOdds: tw.total[sel], trueProb: probs[i], ev: probs[i] * tw.total[sel] - 1, kickoff: mm.kickoff });
+        if (tw.total[sel]) cands.push({ matchId, label, pick: pickZh(sel, mm.home_zh, mm.away_zh), twOdds: tw.total[sel], trueProb: probs[i], ev: probs[i] * tw.total[sel] - 1, kickoff: mm.kickoff });
       });
     }
     // 每場取 EV 最高的一注（且 ≥ 門檻）
