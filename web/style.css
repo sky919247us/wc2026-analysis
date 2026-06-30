@@ -47,6 +47,9 @@ main { flex: 1; width: min(1100px, 100%); margin: 0 auto; padding: 24px 16px; }
 .match .team.away { text-align: right; }
 .match .mid { text-align: center; color: var(--muted); font-size: .85rem; }
 .match .score { font-size: 1.4rem; font-weight: 700; color: var(--gold); }
+.match .score .pk { font-size: .9rem; color: var(--muted); font-weight: 600; }
+.match .pk-note { font-size: .68rem; color: var(--muted); }
+.bk-pen { color: var(--muted); font-size: .8rem; }
 .badge {
   display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .75rem;
   background: var(--panel2); color: var(--muted); margin-top: 4px;

@@ -71,7 +71,7 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     if (upcoming) where += " AND m.status != 'FINISHED'";
 
     const { results } = await env.DB.prepare(
-      `SELECT m.id, m.stage, m.kickoff_utc, m.status, m.home_score, m.away_score,
+      `SELECT m.id, m.stage, m.kickoff_utc, m.status, m.home_score, m.away_score, m.home_pens, m.away_pens,
               h.id AS home_id, h.name_zh AS home_zh, h.name_en AS home_en,
               a.id AS away_id, a.name_zh AS away_zh, a.name_en AS away_en
        FROM matches m
@@ -96,24 +96,29 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     // LEFT JOIN：對手未定的一邊（home_zh/away_zh = null）也要回傳，前端顯示「待定」。
     // 依 id 排序＝對戰籤位順序（football-data 淘汰賽 id 即籤位序）。
     const { results } = await env.DB.prepare(
-      `SELECT m.id, m.stage, m.kickoff_utc, m.status, m.home_score, m.away_score,
+      `SELECT m.id, m.stage, m.kickoff_utc, m.status, m.home_score, m.away_score, m.home_pens, m.away_pens,
               h.id AS home_id, h.name_zh AS home_zh, a.id AS away_id, a.name_zh AS away_zh
        FROM matches m
        LEFT JOIN teams h ON h.id = m.home_id
        LEFT JOIN teams a ON a.id = m.away_id
        WHERE m.stage IN ('LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','THIRD_PLACE','FINAL')
        ORDER BY CAST(m.id AS INTEGER)`,
-    ).all<{ id: string; stage: string; status: string; home_score: number | null; away_score: number | null; home_id: string | null; home_zh: string | null; away_id: string | null; away_zh: string | null }>();
+    ).all<{ id: string; stage: string; status: string; home_score: number | null; away_score: number | null; home_pens: number | null; away_pens: number | null; home_id: string | null; home_zh: string | null; away_id: string | null; away_zh: string | null }>();
 
     // football-data 對「晉級下一輪」的指派不可靠（免費層常只填部分）→ 自己從各輪勝隊推算
     // 晉級名單，確保 16強/8強… 名單即時反映實際賽果。
     const FLOW = ["LAST_32", "LAST_16", "QUARTER_FINALS", "SEMI_FINALS", "FINAL"];
     const advanced: Record<string, { tla: string; zh: string }[]> = {};
     for (const m of results ?? []) {
-      if (m.status !== "FINISHED" || m.home_score == null || m.away_score == null || m.home_score === m.away_score) continue;
-      const win = m.home_score > m.away_score
-        ? { tla: m.home_id, zh: m.home_zh }
-        : { tla: m.away_id, zh: m.away_zh };
+      if (m.status !== "FINISHED" || m.home_score == null || m.away_score == null) continue;
+      // 勝方：先比正賽比分，平手再比 PK
+      let side: "home" | "away" | null = null;
+      if (m.home_score > m.away_score) side = "home";
+      else if (m.away_score > m.home_score) side = "away";
+      else if (m.home_pens != null && m.away_pens != null && m.home_pens !== m.away_pens)
+        side = m.home_pens > m.away_pens ? "home" : "away";
+      if (!side) continue;
+      const win = side === "home" ? { tla: m.home_id, zh: m.home_zh } : { tla: m.away_id, zh: m.away_zh };
       if (!win.tla) continue;
       const i = FLOW.indexOf(m.stage);
       if (i < 0 || i >= FLOW.length - 1) continue;

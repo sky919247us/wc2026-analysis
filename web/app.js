@@ -68,8 +68,11 @@ function renderMatches(matches) {
   el.innerHTML = matches.map((m) => {
     const t = new Date(m.kickoff_utc);
     const local = t.toLocaleString("zh-TW", { timeZone: "Asia/Taipei", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", weekday: "short" });
+    const hasPen = m.home_pens != null && m.away_pens != null;
     const mid = m.status === "FINISHED" || m.status === "LIVE"
-      ? `<div class="score">${m.home_score ?? "-"} : ${m.away_score ?? "-"}</div>`
+      ? (hasPen
+          ? `<div class="score"><span class="pk">(${m.home_pens})</span> ${m.home_score} : ${m.away_score} <span class="pk">(${m.away_pens})</span></div><div class="pk-note">PK 決勝</div>`
+          : `<div class="score">${m.home_score ?? "-"} : ${m.away_score ?? "-"}</div>`)
       : `<div>VS</div>`;
     const badge = m.status === "LIVE" ? `<span class="badge live">🔴 LIVE ${liveMinute(m.kickoff_utc)}</span>`
       : m.status === "FINISHED" ? '<span class="badge">已完賽</span>'
@@ -212,21 +215,25 @@ const BK_ROUNDS = [
   ["LAST_32", "32 強"], ["LAST_16", "16 強"], ["QUARTER_FINALS", "8 強"],
   ["SEMI_FINALS", "4 強"], ["FINAL", "決賽"],
 ];
-function bkTeam(name, tla, score, win, played) {
+function bkTeam(name, tla, score, pen, win, played) {
   const label = name ? `${flag(tla)} ${name}` : `<span class="muted">待定</span>`;
+  const sc = played && name
+    ? `${pen != null ? `<span class="bk-pen">(${pen})</span> ` : ""}${score ?? "-"}`
+    : "";
   return `<div class="bk-team ${win ? "winner" : ""}">
     <span>${label}</span>
-    <span class="bk-score">${played && name ? (score ?? "-") : ""}</span>
+    <span class="bk-score">${sc}</span>
   </div>`;
 }
 function bkMatch(m) {
   const played = m.status === "FINISHED" || m.status === "LIVE";
   const fin = m.status === "FINISHED";
-  const hWin = fin && m.home_score > m.away_score;
-  const aWin = fin && m.away_score > m.home_score;
+  const tie = m.home_score === m.away_score;
+  const hWin = fin && (m.home_score > m.away_score || (tie && m.home_pens > m.away_pens));
+  const aWin = fin && (m.away_score > m.home_score || (tie && m.away_pens > m.home_pens));
   return `<div class="bk-match">
-    ${bkTeam(m.home_zh, m.home_id, m.home_score, hWin, played)}
-    ${bkTeam(m.away_zh, m.away_id, m.away_score, aWin, played)}
+    ${bkTeam(m.home_zh, m.home_id, m.home_score, m.home_pens, hWin, played)}
+    ${bkTeam(m.away_zh, m.away_id, m.away_score, m.away_pens, aWin, played)}
   </div>`;
 }
 async function loadBracket() {
