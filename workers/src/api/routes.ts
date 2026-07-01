@@ -10,7 +10,11 @@ import { syncMatches, syncStandings, syncSquads, syncPlayerClubs } from "../fetc
 import { syncScorers } from "../fetchers/scorers";
 import { WC_PLAYER_NAMES_2026 } from "../data/wcPlayerNames2026";
 import { WC_SCORERS_HISTORY, normName } from "../data/wcScorersHistory";
-import { CLUB_ZH } from "../data/clubNames";
+import { CLUB_ZH, CLUB_LG, CLUB_CREST } from "../data/clubNames";
+import { WC_PLAYER_CLUBS } from "../data/wcPlayerClubs";
+
+/** 明星球員→俱樂部 shortName（夏休聯賽 /persons 拿不到時的靜態後備），normName 比對 */
+const STATIC_CLUB = new Map<string, string>(WC_PLAYER_CLUBS.map(([en, sn]) => [normName(en), sn]));
 import { syncIntlOdds } from "../fetchers/oddsApi";
 import { syncOddsPapi } from "../fetchers/oddsPapi";
 import { handleIngest } from "./ingest";
@@ -186,8 +190,7 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
         pos: p.position, pos4, posZh: POS_ZH[pos4] ?? "",
         age, dob: p.dob, nationality: p.nationality,
         team_id: p.team_id, team_zh: p.team_zh, goals,
-        club: p.club, clubZh: p.club ? (CLUB_ZH[p.club] ?? null) : null, clubCrest: p.club_crest,
-        clubLeague: p.club_league ? (LEAGUE_ZH[p.club_league] ?? p.club_league) : null,
+        ...clubInfo(p, n),
       };
     });
     return json({ count: players.length, players });
@@ -596,6 +599,18 @@ const LEAGUE_ZH: Record<string, string> = {
   PPL: "葡超", ELC: "英冠", MLS: "美職聯", BSA: "巴甲", SPL: "蘇超", CL: "歐冠",
   EL: "歐霸", SAU: "沙烏地", TSL: "土超", LMX: "墨西哥", BJL: "比甲", ERE: "荷甲", PRL: "葡超",
 };
+
+/** 俱樂部資訊：優先用 /persons 抓到的；沒有時用明星靜態表補（夏休聯賽） */
+function clubInfo(p: { club: string | null; club_crest: string | null; club_league: string | null }, n: string) {
+  let sn = p.club, crest = p.club_crest, lg = p.club_league;
+  if (!sn) { const s = STATIC_CLUB.get(n); if (s) { sn = s; crest = CLUB_CREST[s] ?? null; lg = CLUB_LG[s] ?? null; } }
+  return {
+    club: sn,
+    clubZh: sn ? (CLUB_ZH[sn] ?? null) : null,
+    clubCrest: crest,
+    clubLeague: lg ? (LEAGUE_ZH[lg] ?? lg) : null,
+  };
+}
 
 /** 各隊近 5 場 W/D/L（由完賽比賽計算，最新在左） */
 async function teamForm(env: Env): Promise<Record<string, string>> {
