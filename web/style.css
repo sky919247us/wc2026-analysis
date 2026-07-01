@@ -120,6 +120,10 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
 .squad-group .group-title { margin-bottom: 8px; }
 .team-card { cursor: pointer; }
 
+/* ---------- Ko-fi 浮動按鈕移到左下角 ---------- */
+.floatingchat-container-wrap, .floatingchat-container-wrap-mobi { left: 16px !important; right: auto !important; }
+.floating-chat-kofi-popup-iframe, .floating-chat-kofi-popup-iframe-mobi { left: 16px !important; right: auto !important; }
+
 /* ---------- 進球分析 ---------- */
 .gs-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
 .gs-filters label { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--muted); }
