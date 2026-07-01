@@ -371,6 +371,17 @@ footer { padding: 20px; text-align: center; font-size: .85rem; color: var(--mute
   background: var(--panel); border: 1px solid var(--win); border-radius: 10px;
 }
 .bk-chip-tag { margin-left: auto; font-size: .68rem; color: var(--win); }
+/* 桌機：輪次切換列隱藏，顯示完整樹；手機：一次一輪 + 上方切換 */
+.bk-rounds-nav { display: none; }
+@media (max-width: 760px) {
+  .bk-rounds-nav { display: flex; gap: 6px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 4px; }
+  .bk-rnav { flex: 0 0 auto; padding: 7px 13px; border-radius: 999px; border: 1px solid #ffffff20; background: var(--panel); color: var(--muted); font-size: .85rem; cursor: pointer; white-space: nowrap; }
+  .bk-rnav.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .bracket { display: block; overflow: visible; }
+  .bracket .bk-round { display: none; min-width: 100%; gap: 10px; }
+  .bracket .bk-round.bk-active { display: flex; }
+  .bracket .bk-round > h3 { display: none; }
+}
 .bk-third { margin-top: 18px; max-width: 320px; }
 .scorer-table td.name .muted { font-weight: 400; font-size: .82rem; }
 .scorer-table tr.sc-out td { color: var(--muted); }

@@ -249,7 +249,7 @@ async function loadBracket() {
   const advanced = data.advanced || {};
   const byStage = {};
   for (const m of matches) (byStage[m.stage] ??= []).push(m);
-  const cols = BK_ROUNDS.map(([stage, label]) => {
+  const roundData = BK_ROUNDS.map(([stage, label]) => {
     const list = byStage[stage] || [];
     // 雙方都確定才畫對戰卡；否則勝隊以「已晉級」晶片呈現（football-data 配對不可靠時的後備）
     const full = list.filter((m) => m.home_id && m.away_id);
@@ -259,16 +259,28 @@ async function loadBracket() {
     const chips = (advanced[stage] || [])
       .filter((t) => !shown.has(t.tla))
       .map((t) => `<div class="bk-chip">${flag(t.tla)} ${t.zh} <span class="bk-chip-tag">已晉級</span></div>`).join("");
-    const body = (cards || chips)
-      ? `${cards}${chips ? `<div class="bk-chips">${chips}</div>` : ""}`
-      : '<div class="bk-match bk-pending">待定</div>';
-    return `<div class="bk-round"><h3>${label}</h3>${body}</div>`;
-  }).join("");
+    const has = !!(cards || chips);
+    const body = has ? `${cards}${chips ? `<div class="bk-chips">${chips}</div>` : ""}` : '<div class="bk-match bk-pending">待定</div>';
+    return { stage, label, body, has };
+  });
+  // 手機一次顯示一輪，預設有內容的最深一輪
+  let active = "LAST_32";
+  for (const r of roundData) if (r.has) active = r.stage;
+
+  const nav = `<div class="bk-rounds-nav">${roundData.map((r) =>
+    `<button class="bk-rnav ${r.stage === active ? "active" : ""}" data-round="${r.stage}">${r.label}</button>`).join("")}</div>`;
+  const cols = roundData.map((r) =>
+    `<div class="bk-round ${r.stage === active ? "bk-active" : ""}" data-round="${r.stage}"><h3>${r.label}</h3>${r.body}</div>`).join("");
   const third = (byStage["THIRD_PLACE"] || [])[0];
   const thirdHtml = third
     ? `<div class="card bk-third"><div class="group-title">🥉 季軍戰</div>${bkMatch(third)}</div>`
     : "";
-  el.innerHTML = `<div class="bracket">${cols}</div>${thirdHtml}`;
+  el.innerHTML = nav + `<div class="bracket">${cols}</div>${thirdHtml}`;
+  el.querySelectorAll(".bk-rnav").forEach((b) => b.addEventListener("click", () => {
+    el.querySelectorAll(".bk-rnav").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    el.querySelectorAll(".bk-round").forEach((c) => c.classList.toggle("bk-active", c.dataset.round === b.dataset.round));
+  }));
 }
 
 /* ---------- 首頁：最新 AI 推薦 ---------- */
