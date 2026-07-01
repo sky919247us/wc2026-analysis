@@ -745,6 +745,108 @@ async function loadTrack() {
   }
 }
 
+/* ---------- 進球分析 ---------- */
+let allGoalMatches = [];
+const gsTeamZh = new Map();
+const gsEl = (id) => document.getElementById(id);
+const gsTotal = (m) => m.reg_h + m.reg_a; // 全場（90分鐘）進球，大小球/單雙依此
+
+async function loadGoalStats() {
+  try {
+    allGoalMatches = (await api("/api/goalstats")).matches || [];
+  } catch {
+    gsEl("gs-body").innerHTML = '<p class="muted">⚠️ API 尚未連線</p>';
+    return;
+  }
+  gsTeamZh.clear();
+  for (const m of allGoalMatches) {
+    if (m.home_id) gsTeamZh.set(m.home_id, m.home_zh);
+    if (m.away_id) gsTeamZh.set(m.away_id, m.away_zh);
+  }
+  const opts = [...gsTeamZh.entries()].sort((a, b) => a[1].localeCompare(b[1], "zh-Hant"));
+  gsEl("gs-team").innerHTML = '<option value="">全部隊伍</option>' +
+    opts.map(([id, zh]) => `<option value="${id}">${zh}</option>`).join("");
+  ["gs-year", "gs-team", "gs-stage", "gs-parity", "gs-line", "gs-ou"].forEach((id) =>
+    gsEl(id).addEventListener("change", renderGoalStats));
+  renderGoalStats();
+}
+
+function gsCard(big, lbl) { return `<div class="gs-stat"><div class="big">${big}</div><div class="lbl">${lbl}</div></div>`; }
+
+function renderGoalStats() {
+  const year = gsEl("gs-year").value, team = gsEl("gs-team").value, stage = gsEl("gs-stage").value;
+  const parity = gsEl("gs-parity").value, line = gsEl("gs-line").value, ou = gsEl("gs-ou").value;
+
+  let base = allGoalMatches;
+  if (year) base = base.filter((m) => String(m.year) === year);
+  if (stage) base = base.filter((m) => m.stage_type === stage);
+  if (team) base = base.filter((m) => m.home_id === team || m.away_id === team);
+  const n = base.length;
+
+  let g = 0, h1 = 0, h2 = 0, even = 0, odd = 0, o25 = 0, btts = 0;
+  for (const m of base) {
+    const t = gsTotal(m);
+    g += t; h1 += m.h1_h + m.h1_a; h2 += m.h2_h + m.h2_a;
+    if (t % 2 === 0) even++; else odd++;
+    if (t > 2.5) o25++;
+    if (m.reg_h > 0 && m.reg_a > 0) btts++;
+  }
+  const pct = (x) => (n ? Math.round((x / n) * 100) : 0);       // 占場次比例
+  const avg = (x) => (n ? (x / n).toFixed(2) : "0");
+  const hp = (x) => (g ? Math.round((x / g) * 100) : 0);        // 占總進球比例（上/下半場用）
+
+  let teamCards = "";
+  if (team) {
+    let fH1 = 0, aH1 = 0, fH2 = 0, aH2 = 0;
+    for (const m of base) {
+      const H = m.home_id === team;
+      fH1 += H ? m.h1_h : m.h1_a; aH1 += H ? m.h1_a : m.h1_h;
+      fH2 += H ? m.h2_h : m.h2_a; aH2 += H ? m.h2_a : m.h2_h;
+    }
+    const nm = gsTeamZh.get(team) || "";
+    teamCards = gsCard(`${fH1 + fH2} / ${aH1 + aH2}`, `${nm} 進球 / 失球`) +
+      gsCard(`${fH1} / ${aH1}`, "上半場 進/失") + gsCard(`${fH2} / ${aH2}`, "下半場 進/失");
+  }
+
+  gsEl("gs-summary").innerHTML = `<div class="gs-stats">
+    ${gsCard(n, "場次")}
+    ${gsCard(avg(g), "場均進球")}
+    ${gsCard(`${hp(h1)}% / ${hp(h2)}%`, "上/下半場 進球占比")}
+    ${gsCard(`${pct(o25)}%`, "大 2.5 球比例")}
+    ${gsCard(`${pct(even)}% / ${pct(odd)}%`, "雙數 / 單數")}
+    ${gsCard(`${pct(btts)}%`, "兩隊都進球")}
+    ${teamCards}
+  </div>`;
+
+  // 單雙 + 大小球 → 篩出清單
+  let shown = base.slice();
+  if (parity) shown = shown.filter((m) => (gsTotal(m) % 2 === 0) === (parity === "even"));
+  let ouNote = "";
+  if (line) {
+    const L = parseFloat(line), over = ou !== "under";
+    shown = shown.filter((m) => (over ? gsTotal(m) > L : gsTotal(m) < L));
+    ouNote = `<div class="gs-note">🎯 <b>${over ? "大" : "小"} ${line} 球</b>：符合 <b>${shown.length}</b> 場，占篩選後 ${n} 場的 <b>${n ? Math.round((shown.length / n) * 100) : 0}%</b></div>`;
+  }
+
+  const rows = shown.map((m) => {
+    const t = gsTotal(m);
+    const et = m.et_h != null ? ` <span class="muted">加時 ${m.et_h}:${m.et_a}</span>` : "";
+    const pk = m.pen_h != null ? ` <span class="gs-pk">PK ${m.pen_h}:${m.pen_a}</span>` : "";
+    const hl = (id) => (team && id === team ? ' class="gs-hl"' : "");
+    return `<tr>
+      <td>${m.year}</td><td>${m.round}</td>
+      <td class="gs-match"><span${hl(m.home_id)}>${m.home_zh}</span> <b>${m.reg_h}:${m.reg_a}</b> <span${hl(m.away_id)}>${m.away_zh}</span>${et}${pk}</td>
+      <td>${m.h1_h}:${m.h1_a}</td><td>${m.h2_h}:${m.h2_a}</td>
+      <td><b>${t}</b></td><td>${t % 2 === 0 ? "雙" : "單"}</td>
+    </tr>`;
+  }).join("");
+
+  gsEl("gs-body").innerHTML = ouNote + `<div class="card"><table class="gs-table">
+    <tr><th>年</th><th>賽事</th><th style="text-align:left">對戰（全場比分）</th><th>上半</th><th>下半</th><th>全場</th><th>單雙</th></tr>
+    ${rows || '<tr><td colspan="7" class="muted" style="padding:16px">沒有符合的比賽</td></tr>'}
+  </table></div>`;
+}
+
 /* ---------- 球員名單 ---------- */
 let allPlayers = [];
 const playerById = new Map();
@@ -913,6 +1015,7 @@ loadPlayers();
 loadTeams();
 loadAnalysis();
 loadTrack();
+loadGoalStats();
 loadNews();
 loadParlays();
 loadOutright();

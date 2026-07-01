@@ -16,6 +16,7 @@
       <button class="tab" data-tab="bracket">🏟️ 淘汰賽</button>
       <button class="tab" data-tab="matches">⚽ 比分盤</button>
       <button class="tab" data-tab="track">🏆 戰績</button>
+      <button class="tab" data-tab="goals">📊 進球分析</button>
       <button class="tab" data-tab="outright">👑 冠軍</button>
       <button class="tab" data-tab="parlays">🎯 串關</button>
       <button class="tab" data-tab="scorers">⚽ 進球王</button>
@@ -90,6 +91,23 @@
 
     <section id="track" class="panel">
       <div id="track-body"><p class="muted">載入中…</p></div>
+    </section>
+
+    <section id="goals" class="panel">
+      <div class="hero-head">
+        <h2>📊 進球分析</h2>
+        <p class="muted">2022 卡達 + 2026 世界盃每場的上/下半場、加時、PK 進球資料。大小球與單雙以全場（90 分鐘）進球計。</p>
+      </div>
+      <div class="gs-filters">
+        <label>年份<select id="gs-year"><option value="">全部</option><option value="2026">2026</option><option value="2022">2022</option></select></label>
+        <label>隊伍<select id="gs-team"><option value="">全部隊伍</option></select></label>
+        <label>階段<select id="gs-stage"><option value="">全部</option><option value="group">小組賽</option><option value="knockout">淘汰賽</option></select></label>
+        <label>單雙<select id="gs-parity"><option value="">全部</option><option value="odd">單數</option><option value="even">雙數（含0）</option></select></label>
+        <label>大小球<select id="gs-line"><option value="">不限</option><option>0.5</option><option>1.5</option><option>2.5</option><option>3.5</option><option>4.5</option><option>5.5</option></select></label>
+        <label>大/小<select id="gs-ou"><option value="over">大</option><option value="under">小</option></select></label>
+      </div>
+      <div id="gs-summary"></div>
+      <div id="gs-body"><p class="muted">載入中…</p></div>
     </section>
 
     <section id="news" class="panel">

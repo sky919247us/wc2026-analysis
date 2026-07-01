@@ -41,6 +41,8 @@ export async function syncMatches(env: Env): Promise<{ teams: number; matches: n
   const data = await fdFetch(env, "/competitions/WC/matches");
   const teams = new Map<string, { name: string; grp: string | null }>();
   const stmts: D1PreparedStatement[] = [];
+  const mgStmts: D1PreparedStatement[] = [];
+  const KO_ZH: Record<string, string> = { LAST_32: "32強", LAST_16: "16強", QUARTER_FINALS: "8強", SEMI_FINALS: "4強", THIRD_PLACE: "季軍戰", FINAL: "決賽" };
 
   for (const m of data.matches ?? []) {
     // group 格式如 "GROUP_A"；淘汰賽為 null，用 stage（LAST_32/LAST_16/QUARTER_FINALS...）
@@ -71,6 +73,32 @@ export async function syncMatches(env: Env): Promise<{ teams: number; matches: n
         hs, as, hp, ap, winner,
       ),
     );
+
+    // 進球分析：完賽場的上/下半場/加時/PK 分解 → match_goals（與 2022 種子同表）
+    const sc = m.score;
+    if (m.status === "FINISHED" && sc?.halfTime?.home != null && homeTla && awayTla) {
+      const reg = sc.regularTime ?? sc.fullTime ?? {}; // 90 分鐘（ET/PK 場才有 regularTime）
+      const regh = reg.home, rega = reg.away;
+      if (regh != null && rega != null) {
+        const h1h = sc.halfTime.home, h1a = sc.halfTime.away;
+        mgStmts.push(
+          env.DB.prepare(
+            `INSERT INTO match_goals (id,year,stage_type,round,home_id,away_id,home_zh,away_zh,h1_h,h1_a,h2_h,h2_a,reg_h,reg_a,et_h,et_a,pen_h,pen_a,status)
+             VALUES ('y2026-'||?1,2026,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,'FINISHED')
+             ON CONFLICT(id) DO UPDATE SET stage_type=?2,round=?3,home_id=?4,away_id=?5,home_zh=?6,away_zh=?7,h1_h=?8,h1_a=?9,h2_h=?10,h2_a=?11,reg_h=?12,reg_a=?13,et_h=?14,et_a=?15,pen_h=?16,pen_a=?17`,
+          ).bind(
+            String(m.id),
+            grp ? "group" : "knockout",
+            grp ? "小組賽" : (KO_ZH[m.stage] ?? m.stage),
+            homeTla, awayTla,
+            ZH_NAMES[homeTla] ?? m.homeTeam.name, ZH_NAMES[awayTla] ?? m.awayTeam.name,
+            h1h, h1a, regh - h1h, rega - h1a, regh, rega,
+            sc.extraTime?.home ?? null, sc.extraTime?.away ?? null,
+            sc.penalties?.home ?? null, sc.penalties?.away ?? null,
+          ),
+        );
+      }
+    }
   }
 
   const teamStmts = [...teams.entries()].map(([tla, t]) =>
@@ -81,7 +109,7 @@ export async function syncMatches(env: Env): Promise<{ teams: number; matches: n
   );
 
   // D1 batch 上限內分批執行
-  for (const batch of chunk([...teamStmts, ...stmts], 50)) await env.DB.batch(batch);
+  for (const batch of chunk([...teamStmts, ...stmts, ...mgStmts], 50)) await env.DB.batch(batch);
 
   // 近期賽程也放 KV 給首頁秒讀
   await env.CACHE.put("matches:lastSync", new Date().toISOString());

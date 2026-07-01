@@ -140,6 +140,17 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
       : json({ updatedAt: null, current2026: [], allTime: [] });
   }
 
+  // 進球分析：2022 + 2026 每場的上/下半場/加時/PK 分解（前端篩選與加總）
+  if (path === "/api/goalstats") {
+    const { results } = await env.DB.prepare(
+      `SELECT id, year, stage_type, round, home_id, away_id, home_zh, away_zh,
+              h1_h, h1_a, h2_h, h2_a, reg_h, reg_a, et_h, et_a, pen_h, pen_a
+       FROM match_goals WHERE status = 'FINISHED'
+       ORDER BY year DESC, id`,
+    ).all();
+    return json({ matches: results });
+  }
+
   // 球員名單：48 隊全 squad + 中文名/位置/年齡/進球（給名單頁前端篩選）
   if (path === "/api/players") {
     const { results } = await env.DB.prepare(

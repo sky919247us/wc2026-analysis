@@ -119,6 +119,26 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
 .squad-group { margin-top: 16px; }
 .squad-group .group-title { margin-bottom: 8px; }
 .team-card { cursor: pointer; }
+
+/* ---------- 進球分析 ---------- */
+.gs-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.gs-filters label { display: flex; flex-direction: column; gap: 4px; font-size: .78rem; color: var(--muted); }
+.gs-filters select {
+  padding: 8px 10px; background: var(--panel); color: var(--text);
+  border: 1px solid #ffffff20; border-radius: 8px; font-size: .9rem; cursor: pointer;
+}
+.gs-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.gs-stat { background: var(--panel2); border-radius: 10px; padding: 12px 10px; text-align: center; }
+.gs-stat .big { font-size: 1.15rem; font-weight: 700; color: var(--gold); }
+.gs-stat .lbl { font-size: .72rem; color: var(--muted); margin-top: 4px; }
+.gs-note { background: #8b5cf618; border: 1px solid var(--accent); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: .92rem; }
+.gs-table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+.gs-table th, .gs-table td { padding: 7px 6px; text-align: center; border-bottom: 1px solid #ffffff0d; }
+.gs-table th { color: var(--muted); font-weight: 500; }
+.gs-table td.gs-match { text-align: left; white-space: nowrap; }
+.gs-hl { color: var(--accent2); font-weight: 700; }
+.gs-pk { color: var(--gold); font-size: .8rem; }
+@media(max-width:760px){ .gs-table { font-size: .78rem; } .gs-table th, .gs-table td { padding: 6px 4px; } }
 /* ---- 每日總覽 ---- */
 .daily-card { margin-bottom: 22px; border-left: 3px solid var(--accent); }
 .daily-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; }
