@@ -763,7 +763,7 @@ function playerCard(p) {
       <div class="pl-name">${name}</div>
       ${en ? `<div class="muted pl-en">${en}</div>` : ""}
       <div class="pl-meta">${flag(p.team_id)} ${p.team_zh || p.nationality || ""} · ${p.posZh || "-"} · ${p.age ?? "-"}歲</div>
-      ${p.club ? `<div class="pl-club">${p.clubCrest ? `<img class="club-crest" src="${p.clubCrest}" loading="lazy" alt="">` : "🏟️"} ${p.clubLeague ? `${p.clubLeague}・` : ""}${p.club}</div>` : ""}
+      ${p.club ? `<div class="pl-club">${p.clubCrest ? `<img class="club-crest" src="${p.clubCrest}" loading="lazy" alt="">` : "🏟️"} ${p.clubLeague ? `${p.clubLeague}・` : ""}${p.clubZh ? `${p.clubZh} ` : ""}${p.club}</div>` : ""}
     </div>
     ${p.goals ? `<span class="pl-goals">${p.goals}⚽</span>` : ""}
   </div>`;
@@ -797,7 +797,7 @@ function openPlayerDetail(p, backFn) {
     </div>
     ${p.club ? `<div class="pl-club-row">
       ${p.clubCrest ? `<img class="club-crest lg" src="${p.clubCrest}" alt="">` : '<span class="club-crest lg">🏟️</span>'}
-      <div><div class="muted" style="font-size:.72rem">所屬俱樂部</div><b>${p.clubLeague ? `${p.clubLeague}・` : ""}${p.club}</b></div>
+      <div><div class="muted" style="font-size:.72rem">所屬俱樂部</div><b>${p.clubLeague ? `${p.clubLeague}・` : ""}${p.clubZh ? `${p.clubZh} ` : ""}${p.club}</b></div>
     </div>` : ""}
     <div class="pl-stats">
       ${stat(p.posZh || "-", "位置")}

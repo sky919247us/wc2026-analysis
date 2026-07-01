@@ -10,6 +10,7 @@ import { syncMatches, syncStandings, syncSquads, syncPlayerClubs } from "../fetc
 import { syncScorers } from "../fetchers/scorers";
 import { WC_PLAYER_NAMES_2026 } from "../data/wcPlayerNames2026";
 import { WC_SCORERS_HISTORY, normName } from "../data/wcScorersHistory";
+import { CLUB_ZH } from "../data/clubNames";
 import { syncIntlOdds } from "../fetchers/oddsApi";
 import { syncOddsPapi } from "../fetchers/oddsPapi";
 import { handleIngest } from "./ingest";
@@ -174,7 +175,7 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
         pos: p.position, pos4, posZh: POS_ZH[pos4] ?? "",
         age, dob: p.dob, nationality: p.nationality,
         team_id: p.team_id, team_zh: p.team_zh, goals,
-        club: p.club, clubCrest: p.club_crest,
+        club: p.club, clubZh: p.club ? (CLUB_ZH[p.club] ?? null) : null, clubCrest: p.club_crest,
         clubLeague: p.club_league ? (LEAGUE_ZH[p.club_league] ?? p.club_league) : null,
       };
     });
@@ -582,7 +583,7 @@ const POS_ZH: Record<string, string> = { GK: "守門員", DF: "後衛", MF: "中
 const LEAGUE_ZH: Record<string, string> = {
   PL: "英超", PD: "西甲", BL1: "德甲", SA: "義甲", FL1: "法甲", DED: "荷甲",
   PPL: "葡超", ELC: "英冠", MLS: "美職聯", BSA: "巴甲", SPL: "蘇超", CL: "歐冠",
-  EL: "歐霸", SAU: "沙烏地", TUR: "土超", BJL: "比甲", ERE: "荷甲", PRL: "葡超",
+  EL: "歐霸", SAU: "沙烏地", TSL: "土超", LMX: "墨西哥", BJL: "比甲", ERE: "荷甲", PRL: "葡超",
 };
 
 /** 各隊近 5 場 W/D/L（由完賽比賽計算，最新在左） */
