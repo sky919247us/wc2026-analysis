@@ -6,7 +6,7 @@
  *   GET /api/teams
  */
 import type { Env } from "../env";
-import { syncMatches, syncStandings, syncSquads } from "../fetchers/footballData";
+import { syncMatches, syncStandings, syncSquads, syncPlayerClubs } from "../fetchers/footballData";
 import { syncScorers } from "../fetchers/scorers";
 import { WC_PLAYER_NAMES_2026 } from "../data/wcPlayerNames2026";
 import { WC_SCORERS_HISTORY, normName } from "../data/wcScorersHistory";
@@ -142,10 +142,11 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
   // 球員名單：48 隊全 squad + 中文名/位置/年齡/進球（給名單頁前端篩選）
   if (path === "/api/players") {
     const { results } = await env.DB.prepare(
-      `SELECT p.id, p.name, p.position, p.dob, p.nationality, p.team_id, t.name_zh AS team_zh
+      `SELECT p.id, p.name, p.position, p.dob, p.nationality, p.team_id, t.name_zh AS team_zh,
+              p.club, p.club_crest, p.club_league
        FROM players p LEFT JOIN teams t ON t.id = p.team_id
        ORDER BY t.grp, t.name_zh, p.id`,
-    ).all<{ id: string; name: string; position: string | null; dob: string | null; nationality: string | null; team_id: string; team_zh: string }>();
+    ).all<{ id: string; name: string; position: string | null; dob: string | null; nationality: string | null; team_id: string; team_zh: string; club: string | null; club_crest: string | null; club_league: string | null }>();
 
     // 中文名對照（球員 2026 表 + 歷史種子）
     const zhMap = new Map<string, string>();
@@ -173,6 +174,8 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
         pos: p.position, pos4, posZh: POS_ZH[pos4] ?? "",
         age, dob: p.dob, nationality: p.nationality,
         team_id: p.team_id, team_zh: p.team_zh, goals,
+        club: p.club, clubCrest: p.club_crest,
+        clubLeague: p.club_league ? (LEAGUE_ZH[p.club_league] ?? p.club_league) : null,
       };
     });
     return json({ count: players.length, players });
@@ -437,6 +440,11 @@ export async function handleApi(req: Request, env: Env): Promise<Response> {
     if (!env.ADMIN_KEY || req.headers.get("x-admin-key") !== env.ADMIN_KEY)
       return json({ error: "unauthorized" }, 401);
 
+    if (path === "/api/admin/clubs-sync") {
+      const n = Math.min(Number(url.searchParams.get("n")) || 8, 10);
+      return json({ ok: true, ...(await syncPlayerClubs(env, n)) });
+    }
+
     if (path === "/api/admin/sync") {
       const r = await syncMatches(env);
       const g = await syncStandings(env);
@@ -569,6 +577,13 @@ function posCat(p: string | null): "GK" | "DF" | "MF" | "FW" | "" {
   return "";
 }
 const POS_ZH: Record<string, string> = { GK: "守門員", DF: "後衛", MF: "中場", FW: "前鋒", "": "" };
+
+/** football-data 聯賽代碼 → 中文（常見者；未對到顯示原代碼/名稱） */
+const LEAGUE_ZH: Record<string, string> = {
+  PL: "英超", PD: "西甲", BL1: "德甲", SA: "義甲", FL1: "法甲", DED: "荷甲",
+  PPL: "葡超", ELC: "英冠", MLS: "美職聯", BSA: "巴甲", SPL: "蘇超", CL: "歐冠",
+  EL: "歐霸", SAU: "沙烏地", TUR: "土超", BJL: "比甲", ERE: "荷甲", PRL: "葡超",
+};
 
 /** 各隊近 5 場 W/D/L（由完賽比賽計算，最新在左） */
 async function teamForm(env: Env): Promise<Record<string, string>> {

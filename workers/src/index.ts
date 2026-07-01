@@ -5,7 +5,7 @@
  */
 import type { Env } from "./env";
 import { handleApi } from "./api/routes";
-import { syncMatches, syncStandings, syncSquads } from "./fetchers/footballData";
+import { syncMatches, syncStandings, syncSquads, syncPlayerClubs } from "./fetchers/footballData";
 import { syncScorers } from "./fetchers/scorers";
 import { syncIntlOdds } from "./fetchers/oddsApi";
 import { syncOddsPapi } from "./fetchers/oddsPapi";
@@ -64,6 +64,10 @@ export default {
     // 每日 UTC 04:00：球員名單同步（squad 幾乎不變，一天一次足夠）
     if (minute === 0 && hour === 4)
       ctx.waitUntil(syncSquads(env).then((r) => console.log(`squads sync: ${r.players} players`)).catch((e) => console.error("squads", e)));
+
+    // 球員俱樂部回填：/persons 免費層 10/分，故每次少量、避開整點賽程同步，慢慢填滿（約 1 天）
+    if (env.FOOTBALL_DATA_TOKEN && minute % 5 === 0 && minute !== 0 && minute !== 30)
+      ctx.waitUntil(syncPlayerClubs(env, 8).then((r) => { if (r.checked) console.log(`club backfill: +${r.withClub}/${r.checked}, ${r.remaining} left`); }).catch((e) => console.error("clubs", e)));
 
     // 每 20 分鐘：重算預測（吸收最新 Pinnacle 市場信號）
     if (minute % 20 === 0 && minute !== 0) ctx.waitUntil(runPredictions(env).then(() => {}));

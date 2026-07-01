@@ -763,6 +763,7 @@ function playerCard(p) {
       <div class="pl-name">${name}</div>
       ${en ? `<div class="muted pl-en">${en}</div>` : ""}
       <div class="pl-meta">${flag(p.team_id)} ${p.team_zh || p.nationality || ""} · ${p.posZh || "-"} · ${p.age ?? "-"}歲</div>
+      ${p.club ? `<div class="pl-club">${p.clubCrest ? `<img class="club-crest" src="${p.clubCrest}" loading="lazy" alt="">` : "🏟️"} ${p.clubLeague ? `${p.clubLeague}・` : ""}${p.club}</div>` : ""}
     </div>
     ${p.goals ? `<span class="pl-goals">${p.goals}⚽</span>` : ""}
   </div>`;
@@ -794,6 +795,10 @@ function openPlayerDetail(p, backFn) {
         <p class="muted">${flag(p.team_id)} ${p.team_zh || ""} · ${p.posZh || "-"} · ${p.age ?? "-"}歲</p>
       </div>
     </div>
+    ${p.club ? `<div class="pl-club-row">
+      ${p.clubCrest ? `<img class="club-crest lg" src="${p.clubCrest}" alt="">` : '<span class="club-crest lg">🏟️</span>'}
+      <div><div class="muted" style="font-size:.72rem">所屬俱樂部</div><b>${p.clubLeague ? `${p.clubLeague}・` : ""}${p.club}</b></div>
+    </div>` : ""}
     <div class="pl-stats">
       ${stat(p.posZh || "-", "位置")}
       ${stat(p.age ?? "-", "年齡")}
@@ -831,7 +836,8 @@ function applyPlayerFilters() {
   if (team) list = list.filter((p) => p.team_zh === team);
   if (pos) list = list.filter((p) => p.pos4 === pos);
   if (q) list = list.filter((p) =>
-    (p.zh && p.zh.includes(q)) || p.name.toLowerCase().includes(q) || (p.team_zh && p.team_zh.includes(q)));
+    (p.zh && p.zh.includes(q)) || p.name.toLowerCase().includes(q) || (p.team_zh && p.team_zh.includes(q)) ||
+    (p.club && p.club.toLowerCase().includes(q)));
   document.getElementById("player-count").textContent = `共 ${list.length} 位`;
   renderPlayerGrid(list);
 }

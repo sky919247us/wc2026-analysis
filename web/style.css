@@ -104,6 +104,10 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
 .pl-en { font-size: .72rem; }
 .pl-meta { font-size: .75rem; color: var(--muted); margin-top: 2px; }
 .pl-goals { position: absolute; top: 9px; right: 11px; font-size: .78rem; color: var(--gold); font-weight: 700; }
+.pl-club { display: flex; align-items: center; gap: 4px; font-size: .72rem; color: var(--accent2); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.club-crest { width: 14px; height: 14px; object-fit: contain; vertical-align: middle; }
+.club-crest.lg { width: 40px; height: 40px; }
+.pl-club-row { display: flex; align-items: center; gap: 12px; background: var(--panel2); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
 .pl-detail-head { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
 .pl-detail-head h2 { margin: 0 0 2px; }
 .pl-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }

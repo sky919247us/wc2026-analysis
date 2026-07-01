@@ -178,6 +178,79 @@ export async function syncSquads(env: Env): Promise<{ teams: number; players: nu
   return { teams: (data.teams ?? []).length, players: stmts.length };
 }
 
+/**
+ * 球員所屬俱樂部回填：football-data /persons/{id} 含 currentTeam（俱樂部名/隊徽/聯賽）。
+ * 免費層 10 req/分，故每次只抓少量（cron 分批慢慢填）。429 限流即停，下次再續。
+ * club_checked 標記避免「無俱樂部者」被反覆重抓。
+ */
+export async function syncPlayerClubs(env: Env, limit = 8): Promise<{ checked: number; withClub: number; remaining: number }> {
+  if (!env.FOOTBALL_DATA_TOKEN) return { checked: 0, withClub: 0, remaining: 0 };
+
+  // 仍在賽程上的球隊優先（已晉級16強 + 32強尚未開打）→ 淘汰隊最後補
+  const { results: ko } = await env.DB.prepare(
+    `SELECT home_id, away_id, status, winner, home_score, away_score, home_pens, away_pens
+     FROM matches WHERE stage IN ('LAST_32','LAST_16','QUARTER_FINALS','SEMI_FINALS','FINAL')`,
+  ).all<{ home_id: string | null; away_id: string | null; status: string; winner: string | null; home_score: number | null; away_score: number | null; home_pens: number | null; away_pens: number | null }>();
+  const participants = new Set<string>(), eliminated = new Set<string>();
+  for (const m of ko ?? []) {
+    if (m.home_id) participants.add(m.home_id);
+    if (m.away_id) participants.add(m.away_id);
+    if (m.status !== "FINISHED") continue;
+    let loser: string | null = null;
+    if (m.winner === "HOME") loser = m.away_id;
+    else if (m.winner === "AWAY") loser = m.home_id;
+    else if (m.home_score != null && m.away_score != null) {
+      if (m.home_score > m.away_score) loser = m.away_id;
+      else if (m.away_score > m.home_score) loser = m.home_id;
+      else if (m.home_pens != null && m.away_pens != null && m.home_pens !== m.away_pens)
+        loser = m.home_pens > m.away_pens ? m.away_id : m.home_id;
+    }
+    if (loser) eliminated.add(loser);
+  }
+  const alive = [...participants].filter((t) => !eliminated.has(t));
+
+  const binds: (string | number)[] = [limit];
+  const inList = alive.map((t) => { binds.push(t); return `?${binds.length}`; }).join(",");
+  const order = inList ? `CASE WHEN team_id IN (${inList}) THEN 0 ELSE 1 END, ` : "";
+  const { results } = await env.DB.prepare(
+    `SELECT id FROM players WHERE club_checked = 0 ORDER BY ${order}id LIMIT ?1`,
+  ).bind(...binds).all<{ id: string }>();
+  let checked = 0, withClub = 0;
+  for (const p of results ?? []) {
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}/persons/${p.id}`, {
+        headers: { "X-Auth-Token": env.FOOTBALL_DATA_TOKEN },
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch { break; }
+    if (res.status === 429) break; // 限流 → 留待下次
+    if (!res.ok) {
+      await env.DB.prepare(`UPDATE players SET club_checked=1 WHERE id=?1`).bind(p.id).run();
+      checked++;
+      continue;
+    }
+    const d = (await res.json()) as any;
+    const ct = d.currentTeam;
+    const comps = (ct?.runningCompetitions ?? []) as any[];
+    // 取「聯賽」而非盃賽（[0] 常是超級盃/洲際盃）
+    const leagueComp = comps.find((c) => c.type === "LEAGUE") ?? comps[0];
+    const league = leagueComp?.code ?? leagueComp?.name ?? null;
+    // 只有國家隊競賽（WC）→ currentTeam 是國家隊，該員俱樂部不在追蹤聯賽內 → 視為無俱樂部
+    const isNational = !ct || comps.length === 0 || comps.every((c: any) => c.code === "WC");
+    const club = isNational ? null : (ct.shortName ?? ct.name ?? null);
+    const crest = isNational ? null : (ct.crest ?? null);
+    const leagueOut = isNational ? null : league;
+    await env.DB.prepare(
+      `UPDATE players SET club=?2, club_crest=?3, club_league=?4, club_checked=1 WHERE id=?1`,
+    ).bind(p.id, club, crest, leagueOut).run();
+    if (club) withClub++;
+    checked++;
+  }
+  const rem = await env.DB.prepare(`SELECT COUNT(*) AS n FROM players WHERE club_checked = 0`).first<{ n: number }>();
+  return { checked, withClub, remaining: rem?.n ?? 0 };
+}
+
 function chunk<T>(arr: T[], n: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
