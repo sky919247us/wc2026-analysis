@@ -143,6 +143,15 @@ tr.qualify td:first-child { border-left: 3px solid var(--accent2); }
 .gs-hl { color: var(--accent2); font-weight: 700; }
 .gs-pk { color: var(--gold); font-size: .8rem; }
 @media(max-width:760px){ .gs-table { font-size: .78rem; } .gs-table th, .gs-table td { padding: 6px 4px; } }
+.gs-analysis-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.gs-panel { padding: 14px 16px; }
+.gs-panel h4 { color: var(--accent2); font-size: .95rem; margin-bottom: 10px; }
+.gs-mini { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.gs-mini th, .gs-mini td { padding: 5px 6px; text-align: center; border-bottom: 1px solid #ffffff0d; }
+.gs-mini th { color: var(--muted); font-weight: 500; }
+.gs-htft th:first-child { color: var(--muted); }
+.gs-tend { font-size: .95rem; }
+.gs-tend b { color: var(--gold); }
 /* ---- 每日總覽 ---- */
 .daily-card { margin-bottom: 22px; border-left: 3px solid var(--accent); }
 .daily-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 10px; }

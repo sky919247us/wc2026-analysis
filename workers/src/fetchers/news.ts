@@ -5,16 +5,22 @@
 import type { Env } from "../env";
 import { generateWithFallback } from "../llm/provider";
 
-interface Feed { source: string; url: string; lang: string }
+interface Feed { source: string; url: string; lang: string; footballOnly?: boolean }
 const FEEDS: Feed[] = [
   { source: "BBC Sport", url: "https://feeds.bbci.co.uk/sport/football/rss.xml", lang: "en" },
   { source: "ESPN FC", url: "https://www.espn.com/espn/rss/soccer/news", lang: "en" },
   { source: "Sky Sports", url: "https://www.skysports.com/rss/12040", lang: "en" },
   { source: "Goal", url: "https://www.goal.com/feeds/news?fmt=rss", lang: "en" },
   { source: "Opta Analyst", url: "https://theanalyst.com/feed", lang: "en" },
+  { source: "The Guardian", url: "https://www.theguardian.com/football/rss", lang: "en" },
+  // 中文源（綜合體育）→ footballOnly 過濾，lang=zh 不進翻譯
+  { source: "運動視界", url: "https://www.sportsv.net/feed", lang: "zh", footballOnly: true },
+  { source: "ETtoday 運動", url: "https://feeds.feedburner.com/ettoday/sport", lang: "zh", footballOnly: true },
 ];
 
-const WC_RE = /world cup|世界盃|fifa|2026/i;
+const WC_RE = /world cup|世界盃|世足|fifa|2026/i;
+// 中文綜合體育源只留足球相關（避免混入棒球/籃球）
+const FOOTBALL_RE = /足球|世界盃|世足|足總|英超|西甲|德甲|義甲|法甲|歐冠|歐霸|歐國盃|國家隊|fifa|soccer|梅西|c\s?羅|姆巴[佩貝]|哈蘭德|內馬爾|莫德里奇|皇馬|巴塞隆納|巴薩|曼城|曼聯|利物浦|阿森納|兵工廠|切爾西|拜仁/i;
 
 function tag(text: string): string {
   return WC_RE.test(text) ? "worldcup" : "football";
@@ -47,7 +53,8 @@ export async function fetchNews(env: Env): Promise<{ inserted: number; feeds: nu
         signal: AbortSignal.timeout(20_000),
       } as RequestInit);
       if (!res.ok) continue;
-      const items = parseRss(await res.text());
+      let items = parseRss(await res.text());
+      if (f.footballOnly) items = items.filter((it) => FOOTBALL_RE.test(it.title + it.desc));
       if (!items.length) continue;
       okFeeds++;
       const stmts = items.slice(0, 30).map((it) =>

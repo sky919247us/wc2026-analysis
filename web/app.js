@@ -772,6 +772,81 @@ async function loadGoalStats() {
 }
 
 function gsCard(big, lbl) { return `<div class="gs-stat"><div class="big">${big}</div><div class="lbl">${lbl}</div></div>`; }
+const gsRes = (h, a) => (h > a ? "主" : h < a ? "客" : "和"); // 主勝/客勝/和
+
+function renderGoalAnalysis(base, team) {
+  const el = gsEl("gs-analysis");
+  const n = base.length;
+  if (!n) { el.innerHTML = ""; return; }
+  const p = (x) => Math.round((x / n) * 100);
+
+  // 大小球全線分布
+  const lines = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5];
+  const ouRows = lines.map((L) => {
+    const over = base.filter((m) => gsTotal(m) > L).length;
+    return `<tr><td>${L}</td><td>${over}</td><td><b>${p(over)}%</b></td><td class="muted">${p(n - over)}%</td></tr>`;
+  }).join("");
+
+  // 半場/全場（HT/FT）組合 — 3×3
+  const grid = {}; let maxCell = 1;
+  for (const m of base) { const k = gsRes(m.h1_h, m.h1_a) + gsRes(m.reg_h, m.reg_a); grid[k] = (grid[k] || 0) + 1; }
+  const htft = ["主", "和", "客"].map((ht) =>
+    `<tr><th>半${ht}</th>${["主", "和", "客"].map((ft) => { const c = grid[ht + ft] || 0; const hot = c >= maxCell && c > 0; return `<td class="${c ? "" : "muted"}">${c ? `${c}<span class="muted"> ${p(c)}%</span>` : "0"}</td>`; }).join("")}</tr>`).join("");
+
+  // 常見比分（勝-負 排序，不分主客）
+  const cs = {};
+  for (const m of base) { const k = `${Math.max(m.reg_h, m.reg_a)}-${Math.min(m.reg_h, m.reg_a)}`; cs[k] = (cs[k] || 0) + 1; }
+  const csRows = Object.entries(cs).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    .map(([k, c]) => `<tr><td>${k}</td><td>${c}</td><td class="muted">${p(c)}%</td></tr>`).join("");
+
+  // 淨勝球分布
+  const mg = { 0: 0, 1: 0, 2: 0, 3: 0 };
+  for (const m of base) { const d = Math.abs(m.reg_h - m.reg_a); mg[d >= 3 ? 3 : d]++; }
+  const mgRows = [["和局", mg[0]], ["1 球差", mg[1]], ["2 球差", mg[2]], ["3+ 球差(大勝)", mg[3]]]
+    .map(([lbl, c]) => `<tr><td>${lbl}</td><td>${c}</td><td class="muted">${p(c)}%</td></tr>`).join("");
+
+  // 半場領先保持率
+  let held = 0, drewBack = 0, comeback = 0, htLead = 0;
+  for (const m of base) {
+    if (m.h1_h === m.h1_a) continue; htLead++;
+    const leadHome = m.h1_h > m.h1_a;
+    if (m.reg_h === m.reg_a) drewBack++;
+    else if ((leadHome && m.reg_h > m.reg_a) || (!leadHome && m.reg_a > m.reg_h)) held++;
+    else comeback++;
+  }
+  const hp = (x) => (htLead ? Math.round((x / htLead) * 100) : 0);
+
+  // 零封、加時、PK
+  const clean = base.filter((m) => m.reg_h === 0 || m.reg_a === 0).length;
+  const etN = base.filter((m) => m.et_h != null).length;
+  const pkN = base.filter((m) => m.pen_h != null).length;
+
+  // 隊伍上/下半場傾向
+  let teamTend = "";
+  if (team) {
+    let f1 = 0, f2 = 0;
+    for (const m of base) { const H = m.home_id === team; f1 += H ? m.h1_h : m.h1_a; f2 += H ? m.h2_h : m.h2_a; }
+    const t = f1 + f2;
+    teamTend = `<div class="card gs-panel"><h4>該隊進球傾向</h4>
+      <div class="gs-tend">上半場 <b>${f1}</b>（${t ? Math.round(f1 / t * 100) : 0}%）　下半場 <b>${f2}</b>（${t ? Math.round(f2 / t * 100) : 0}%）</div>
+      <div class="muted" style="margin-top:6px">${f2 > f1 ? "下半場更會進球 🔥" : f1 > f2 ? "上半場更會進球 ⚡" : "上下半場平均"}</div></div>`;
+  }
+
+  el.innerHTML = `<div class="gs-analysis-grid">
+    <div class="card gs-panel"><h4>大小球全線分布</h4>
+      <table class="gs-mini"><tr><th>線</th><th>大</th><th>大%</th><th>小%</th></tr>${ouRows}</table></div>
+    <div class="card gs-panel"><h4>半場 / 全場 結果組合</h4>
+      <table class="gs-mini gs-htft"><tr><th></th><th>全主</th><th>全和</th><th>全客</th></tr>${htft}</table></div>
+    <div class="card gs-panel"><h4>常見比分 Top 8</h4>
+      <table class="gs-mini"><tr><th>比分</th><th>次數</th><th>占比</th></tr>${csRows}</table></div>
+    <div class="card gs-panel"><h4>淨勝球分布</h4>
+      <table class="gs-mini"><tr><th>差距</th><th>場次</th><th>占比</th></tr>${mgRows}</table></div>
+    <div class="card gs-panel"><h4>半場領先後（共 ${htLead} 場）</h4>
+      <div class="gs-tend">保持勝 <b>${hp(held)}%</b>　被追平 ${hp(drewBack)}%　被逆轉 <b>${hp(comeback)}%</b></div>
+      <div class="muted" style="margin-top:8px">零封場次 ${clean}（${p(clean)}%）・進加時 ${etN}・PK ${pkN}</div></div>
+    ${teamTend}
+  </div>`;
+}
 
 function renderGoalStats() {
   const year = gsEl("gs-year").value, team = gsEl("gs-team").value, stage = gsEl("gs-stage").value;
@@ -817,6 +892,8 @@ function renderGoalStats() {
     ${gsCard(`${pct(btts)}%`, "兩隊都進球")}
     ${teamCards}
   </div>`;
+
+  renderGoalAnalysis(base, team);
 
   // 單雙 + 大小球 → 篩出清單
   let shown = base.slice();
