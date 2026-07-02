@@ -152,6 +152,20 @@ export const CLUB_LG: Record<string, string> = {
   "Monaco": "FL1",
   "Strasbourg": "FL1",
   "Paris FC": "FL1",
+  // 美職聯 MLS
+  "Inter Miami": "MLS", "Orlando City": "MLS", "Chicago Fire": "MLS", "Minnesota U": "MLS",
+  "LA Galaxy": "MLS", "LAFC": "MLS", "Atlanta United": "MLS", "Seattle Sounders": "MLS",
+  "NY Red Bulls": "MLS", "NYCFC": "MLS", "Toronto FC": "MLS", "Columbus Crew": "MLS",
+  "Nashville SC": "MLS", "FC Cincinnati": "MLS", "Philadelphia Union": "MLS", "Portland Timbers": "MLS",
+  "Real Salt Lake": "MLS", "Colorado Rapids": "MLS", "Sporting KC": "MLS", "FC Dallas": "MLS",
+  "Houston Dynamo": "MLS", "Austin FC": "MLS", "Charlotte FC": "MLS", "New England": "MLS",
+  "St. Louis City": "MLS", "San Diego FC": "MLS", "CF Montréal": "MLS",
+  // 墨西哥 Liga MX
+  "América": "LMX", "Guadalajara": "LMX", "Cruz Azul": "LMX", "Pumas": "LMX", "Tigres": "LMX",
+  "Monterrey": "LMX", "Toluca": "LMX", "León": "LMX", "Santos Laguna": "LMX", "Pachuca": "LMX",
+  "Atlas": "LMX", "Tijuana": "LMX",
+  // 土超 Süper Lig
+  "Galatasaray": "TSL", "Fenerbahçe": "TSL", "Beşiktaş": "TSL", "Trabzonspor": "TSL", "Başakşehir": "TSL",
 };
 
 export const CLUB_CREST: Record<string, string> = {

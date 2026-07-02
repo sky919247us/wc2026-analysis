@@ -56,4 +56,10 @@ export const WC_PLAYER_CLUBS: [string, string][] = [
   // 摩洛哥 / 其他
   ["Achraf Hakimi", "PSG"], ["Brahim Diaz", "Real Madrid"], ["Noussair Mazraoui", "Man United"],
   ["Ismael Saibari", "PSV"], ["Ismaïla Sarr", "Crystal Palace"], ["Pape Sarr", "Tottenham"],
+  // 墨西哥（旅歐者在五大聯賽有隊徽；Liga MX 者無隊徽）
+  ["Raúl Jiménez", "Fulham"], ["Santiago Giménez", "Milan"], ["Johan Vásquez", "Genoa"],
+  ["Alexis Vega", "Toluca"], ["Roberto Alvarado", "Guadalajara"], ["Gilberto Mora", "Tijuana"],
+  ["Armando González", "Guadalajara"], ["Luis Romo", "Monterrey"], ["Erik Lira", "Cruz Azul"],
+  ["Israel Reyes", "América"], ["Álvaro Fidalgo", "América"], ["Carlos Acevedo", "Santos Laguna"],
+  ["Jesús Gallardo", "Toluca"],
 ];
