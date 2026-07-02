@@ -174,6 +174,7 @@ let scorersData = null;
 function renderScorers(view) {
   const el = document.getElementById("scorers-body");
   const note = document.getElementById("scorers-note");
+  if (view === "keepers") return renderKeepers(el, note);
   if (!scorersData) { el.innerHTML = '<p class="muted">進球王尚未同步</p>'; return; }
   const rows = view === "alltime" ? scorersData.allTime : scorersData.current2026;
   note.textContent = view === "alltime"
@@ -190,6 +191,34 @@ function renderScorers(view) {
       <td>${r.last}</td>
       <td><b>${r.goals}</b></td>
     </tr>`).join("")}
+  </table></div>`;
+}
+// 2026 各隊防守（失球/零封）——供門將排行榜與門將球員卡
+function teamDefense2026() {
+  const stat = new Map();
+  for (const m of allGoalMatches) {
+    if (m.year !== 2026) continue;
+    if (m.home_id) { const s = stat.get(m.home_id) || { zh: m.home_zh, played: 0, conceded: 0, clean: 0 }; s.played++; s.conceded += m.reg_a; if (m.reg_a === 0) s.clean++; stat.set(m.home_id, s); }
+    if (m.away_id) { const s = stat.get(m.away_id) || { zh: m.away_zh, played: 0, conceded: 0, clean: 0 }; s.played++; s.conceded += m.reg_h; if (m.reg_h === 0) s.clean++; stat.set(m.away_id, s); }
+  }
+  return stat;
+}
+function renderKeepers(el, note) {
+  if (note) note.textContent = "2026 各國家隊防守（失球、零封場次）→ 對應該隊門將。免費資料源無個別門將撲救數，故以球隊防守呈現。";
+  if (!allGoalMatches.length || !allPlayers.length) { el.innerHTML = '<p class="muted">資料載入中…請稍候重點一次</p>'; return; }
+  const stat = teamDefense2026();
+  const gks = {};
+  for (const p of allPlayers) if (p.pos4 === "GK") (gks[p.team_id] ??= []).push(p.zh || p.name);
+  const rows = [...stat.entries()].filter(([, s]) => s.played > 0)
+    .sort((a, b) => b[1].clean - a[1].clean || a[1].conceded - b[1].conceded || a[1].conceded / a[1].played - b[1].conceded / b[1].played)
+    .map(([tla, s], i) => `<tr>
+      <td>${i + 1}</td><td class="name">${flag(tla)} ${s.zh}</td>
+      <td>${s.played}</td><td><b>${s.clean}</b></td><td>${s.conceded}</td><td>${(s.conceded / s.played).toFixed(2)}</td>
+      <td class="muted" style="text-align:left">${(gks[tla] || []).slice(0, 3).join("、")}</td>
+    </tr>`).join("");
+  el.innerHTML = `<div class="card"><table class="scorer-table">
+    <tr><th></th><th style="text-align:left">國家隊</th><th>場</th><th>零封</th><th>失球</th><th>場均失</th><th style="text-align:left">門將</th></tr>
+    ${rows || '<tr><td colspan="7" class="muted">尚無 2026 完賽資料</td></tr>'}
   </table></div>`;
 }
 async function loadScorers() {
@@ -972,6 +1001,18 @@ function renderPlayerGrid(list) {
   el.innerHTML = list.map(playerCard).join("");
   bindPlayerCards(el);
 }
+// 門將球員卡：顯示所屬國家隊 2026 防守（球隊層級，免費源無個別門將數據）
+function gkRecordHtml(p) {
+  if (p.pos4 !== "GK") return "";
+  const s = teamDefense2026().get(p.team_id);
+  if (!s || !s.played) return "";
+  return `<div class="pl-club-row" style="margin-top:10px">
+    <span class="club-crest lg">🧤</span>
+    <div><div class="muted" style="font-size:.72rem">${p.team_zh} 本屆防守（球隊）</div>
+      <b>${s.played} 場・失 ${s.conceded} 球・零封 ${s.clean} 場</b>
+      <div class="muted" style="font-size:.7rem;margin-top:2px">＊球隊數據，非個別門將（免費源無撲救/出場資料）</div>
+    </div></div>`;
+}
 function openPlayerDetail(p, backFn) {
   overlay.hidden = false;
   const body = document.getElementById("detail-body");
@@ -998,6 +1039,7 @@ function openPlayerDetail(p, backFn) {
       ${stat(p.nationality || "-", "國籍")}
       ${stat(p.team_zh || "-", "所屬隊")}
     </div>
+    ${gkRecordHtml(p)}
     <p class="muted" style="font-size:.78rem;margin-top:14px">基本資料來自 football-data 免費層（陣容名單）。射門 / 傳球 / 過人等細部數據需付費資料源，暫不提供。</p>`;
   if (backFn) document.getElementById("pl-back").addEventListener("click", backFn);
 }
